@@ -59,15 +59,12 @@ class ImageReader(ABC):
         Returns:
             Raw bytes from the specified location
         """
-        # Calculate sector-aligned read
         start_sector = offset // self.SECTOR_SIZE
         end_sector = (offset + size + self.SECTOR_SIZE - 1) // self.SECTOR_SIZE
         sector_count = end_sector - start_sector
 
-        # Read sectors
         data = self.read_sectors(start_sector, sector_count)
 
-        # Extract requested portion
         start_offset = offset % self.SECTOR_SIZE
         return data[start_offset:start_offset + size]
 
@@ -172,7 +169,6 @@ def open_image(path: Path | str) -> ImageReader:
     if not path.exists():
         raise FileNotFoundError(f"Image file not found: {path}")
 
-    # Detect format by extension
     suffix = path.suffix.lower()
 
     if suffix in {".e01", ".ex01", ".s01"}:
@@ -188,20 +184,16 @@ def open_image(path: Path | str) -> ImageReader:
         return VMDKReader(path)
 
     else:
-        # Try to detect by magic bytes
         with open(path, "rb") as f:
             magic = f.read(8)
 
-        # EWF magic: "EVF\x09\x0d\x0a\xff\x00"
         if magic.startswith(b"EVF\x09\x0d\x0a\xff\x00"):
             from scrut.images.ewf import EWFReader
             return EWFReader(path)
 
-        # VMDK magic: "KDMV" or sparse "# Disk"
         if magic.startswith(b"KDMV") or magic.startswith(b"# Disk"):
             from scrut.images.vmdk import VMDKReader
             return VMDKReader(path)
 
-        # Default to raw
         from scrut.images.raw import RawReader
         return RawReader(path)

@@ -41,7 +41,6 @@ def _get_artifact_data(
     formatter: OutputFormatter = ctx.obj["formatter"]
 
     if target_id and artifact_path:
-        # Read from inside the image
         try:
             target_manager = TargetManager(case_path=case_path)
             target = target_manager.info(target_id)
@@ -54,7 +53,6 @@ def _get_artifact_data(
                 "Use a local file path instead."
             )
 
-        # Open the image and read the file
         from scrut.images import open_image
 
         image_path = Path(target.path)
@@ -69,14 +67,12 @@ def _get_artifact_data(
             raise click.ClickException(f"Failed to open image: {e}")
 
         try:
-            # Get filesystem (first partition by default)
             partitions = image.get_partitions()
             if not partitions:
                 raise click.ClickException("No partitions found in image")
 
             click.echo(f"Found {len(partitions)} partition(s)", err=True)
 
-            # Try to find the file in each partition
             data = None
             for partition in partitions:
                 try:
@@ -89,7 +85,6 @@ def _get_artifact_data(
                         data = fs.read_file(artifact_path)
                         break
                 except Exception:
-                    # Try next partition
                     continue
 
             if data is None:
@@ -99,7 +94,6 @@ def _get_artifact_data(
                     "'Windows/System32/winevt/Logs/Security.evtx'"
                 )
 
-            # Compute hash of the data
             source_hash = hashlib.sha256(data).hexdigest()
             return data, source_hash, target.target_id, len(data)
 
@@ -107,14 +101,12 @@ def _get_artifact_data(
             image.close()
 
     elif local_file:
-        # Read from local file
         if not local_file.exists():
             raise click.ClickException(f"File not found: {local_file}")
 
         data = local_file.read_bytes()
         source_hash = hashlib.sha256(data).hexdigest()
 
-        # Try to find matching target
         tid = None
         try:
             target_manager = TargetManager(case_path=case_path)
@@ -184,7 +176,6 @@ def evtx(
     """
     formatter: OutputFormatter = ctx.obj["formatter"]
 
-    # Validate arguments
     if target_id and not image_artifact_path:
         raise click.ClickException(
             "--target requires --artifact to specify the file path inside the image"
@@ -203,12 +194,10 @@ def evtx(
         )
 
     try:
-        # Get artifact data
         data, source_hash, tid, bytes_read = _get_artifact_data(
             ctx, target_id, image_artifact_path, artifact_path
         )
 
-        # Import parser
         try:
             from scrut.parsers.evtx import EvtxParser
         except RuntimeError as e:
@@ -221,7 +210,6 @@ def evtx(
             ctx.exit(1)
             return
 
-        # Create parser
         parser = EvtxParser(
             target_id=tid,
             artifact_path=image_artifact_path or str(artifact_path),
@@ -229,34 +217,27 @@ def evtx(
             timezone_str=ctx.obj.get("timezone", "UTC"),
         )
 
-        # Track metrics
         start_time = time.time()
         records_processed = 0
         records_output = 0
 
-        # Parse from bytes
         for record in parser.parse_bytes(data):
             records_processed += 1
 
-            # Apply filters
             if since and record.timestamp:
                 from datetime import datetime
                 since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
                 if record.timestamp < since_dt:
                     continue
 
-            # Output record
             formatter.output(record.model_dump(mode="json", exclude_none=True))
             records_output += 1
 
-            # Apply limit
             if limit and records_output >= limit:
                 break
 
-        # Calculate duration
         duration_ms = int((time.time() - start_time) * 1000)
 
-        # Emit metrics to stderr
         metrics = StepMetrics(
             run_id=tid,
             step_name="parse_evtx",
@@ -270,7 +251,6 @@ def evtx(
             skipped=records_processed - records_output,
         )
 
-        # Flush table output for human format
         formatter.flush_table(title=f"EVTX Records ({records_output} total)")
 
         click.echo(f"Parsed {records_output} records in {duration_ms}ms", err=True)
@@ -337,7 +317,6 @@ def prefetch(
     """
     formatter: OutputFormatter = ctx.obj["formatter"]
 
-    # Validate arguments
     if target_id and not image_artifact_path:
         raise click.ClickException(
             "--target requires --artifact to specify the file path inside the image"
@@ -356,12 +335,10 @@ def prefetch(
         )
 
     try:
-        # Get artifact data
         data, source_hash, tid, bytes_read = _get_artifact_data(
             ctx, target_id, image_artifact_path, artifact_path
         )
 
-        # Import parser
         try:
             from scrut.parsers.prefetch import PrefetchParser
         except RuntimeError as e:
@@ -374,7 +351,6 @@ def prefetch(
             ctx.exit(1)
             return
 
-        # Create parser
         parser = PrefetchParser(
             target_id=tid,
             artifact_path=image_artifact_path or str(artifact_path),
@@ -382,34 +358,27 @@ def prefetch(
             timezone_str=ctx.obj.get("timezone", "UTC"),
         )
 
-        # Track metrics
         start_time = time.time()
         records_processed = 0
         records_output = 0
 
-        # Parse from bytes
         for record in parser.parse_bytes(data):
             records_processed += 1
 
-            # Apply filters
             if since and record.timestamp:
                 from datetime import datetime
                 since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
                 if record.timestamp < since_dt:
                     continue
 
-            # Output record
             formatter.output(record.model_dump(mode="json", exclude_none=True))
             records_output += 1
 
-            # Apply limit
             if limit and records_output >= limit:
                 break
 
-        # Calculate duration
         duration_ms = int((time.time() - start_time) * 1000)
 
-        # Emit metrics to stderr
         metrics = StepMetrics(
             run_id=tid,
             step_name="parse_prefetch",
@@ -423,7 +392,6 @@ def prefetch(
             skipped=records_processed - records_output,
         )
 
-        # Flush table output for human format
         formatter.flush_table(title=f"Prefetch Records ({records_output} total)")
 
         click.echo(f"Parsed {records_output} prefetch record(s) in {duration_ms}ms", err=True)
@@ -493,7 +461,6 @@ def registry(
     """
     formatter: OutputFormatter = ctx.obj["formatter"]
 
-    # Validate arguments
     if target_id and not image_artifact_path:
         raise click.ClickException(
             "--target requires --artifact to specify the file path inside the image"
@@ -512,15 +479,12 @@ def registry(
         )
 
     try:
-        # Get artifact data
         data, source_hash, tid, bytes_read = _get_artifact_data(
             ctx, target_id, image_artifact_path, artifact_path
         )
 
-        # Import parser
         from scrut.parsers.registry import RegistryParser
 
-        # Create parser
         parser = RegistryParser(
             target_id=tid,
             artifact_path=image_artifact_path or str(artifact_path),
@@ -528,33 +492,26 @@ def registry(
             timezone_str=ctx.obj.get("timezone", "UTC"),
         )
 
-        # Track metrics
         start_time = time.time()
         records_processed = 0
         records_output = 0
 
-        # Parse from bytes
         for record in parser.parse_bytes(data):
             records_processed += 1
 
-            # Apply key filter
             if key_filter:
                 key_path = record.data.get("key_path", "")
                 if key_filter.lower() not in key_path.lower():
                     continue
 
-            # Output record
             formatter.output(record.model_dump(mode="json", exclude_none=True))
             records_output += 1
 
-            # Apply limit
             if limit and records_output >= limit:
                 break
 
-        # Calculate duration
         duration_ms = int((time.time() - start_time) * 1000)
 
-        # Emit metrics to stderr
         metrics = StepMetrics(
             run_id=tid,
             step_name="parse_registry",
@@ -568,7 +525,6 @@ def registry(
             skipped=records_processed - records_output,
         )
 
-        # Flush table output for human format
         formatter.flush_table(title=f"Registry Records ({records_output} total)")
 
         click.echo(f"Parsed {records_output} registry key(s) in {duration_ms}ms", err=True)
@@ -612,7 +568,6 @@ def list_artifacts(
     formatter: OutputFormatter = ctx.obj["formatter"]
     case_path = Path(ctx.obj.get("case_path", "."))
 
-    # Artifact patterns
     patterns = {
         "evtx": ("*.evtx", ["Windows/System32/winevt/Logs"]),
         "prefetch": ("*.pf", ["Windows/Prefetch"]),
@@ -628,14 +583,12 @@ def list_artifacts(
     pattern, search_paths = patterns[artifact_type]
 
     try:
-        # Get target
         target_manager = TargetManager(case_path=case_path)
         target = target_manager.info(target_id)
 
         if target.type != TargetType.IMAGE:
             raise click.ClickException(f"Target is not an image: {target.type.value}")
 
-        # Open image
         from scrut.images import open_image
 
         image = open_image(Path(target.path))
@@ -667,7 +620,6 @@ def list_artifacts(
                 except Exception:
                     continue
 
-            # Output results
             if formatter.format == "jsonl":
                 for artifact in found_artifacts:
                     formatter.output(artifact)

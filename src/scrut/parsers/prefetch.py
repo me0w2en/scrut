@@ -14,7 +14,6 @@ from uuid import UUID
 from scrut.models.record import ParsedRecord
 from scrut.parsers.base import BaseParser, ParserRegistry
 
-# Version of this parser
 PARSER_VERSION = "0.1.0"
 
 # Prefetch signatures
@@ -326,7 +325,6 @@ class PrefetchFile:
         if len(self.data) < 84:
             raise ValueError("Prefetch file too small")
 
-        # Check signature and handle compression
         if self.data[:4] == PREFETCH_SIGNATURE_MAM:
             # Compressed prefetch (Win10+)
             try:
@@ -365,10 +363,8 @@ class PrefetchFile:
                 f"or offset 4 ({self.data[4:8]!r})"
             )
 
-        # Parse header
         self._parse_header()
 
-        # Parse file information based on version
         if self.version == VERSION_XP:
             self._parse_v17()
         elif self.version == VERSION_VISTA:
@@ -378,7 +374,6 @@ class PrefetchFile:
         elif self.version == VERSION_10:
             self._parse_v30()
         else:
-            # Try generic parsing
             self._parse_generic()
 
     def _parse_header(self) -> None:
@@ -448,17 +443,13 @@ class PrefetchFile:
         section_d_offset = struct.unpack("<I", self.data[108:112])[0]
         section_d_entries = struct.unpack("<I", self.data[112:116])[0]
 
-        # Last run time
         last_run_filetime = struct.unpack("<Q", self.data[120:128])[0]
         if last_run_filetime > 0:
             self.last_run_times.append(self._filetime_to_datetime(last_run_filetime))
 
         self.run_count = struct.unpack("<I", self.data[144:148])[0]
 
-        # Parse filename strings
         self._parse_filename_strings(section_c_offset, section_c_length)
-
-        # Parse volume info
         self._parse_volume_info_v17(section_d_offset, section_d_entries)
 
     def _parse_v23(self) -> None:
@@ -481,10 +472,7 @@ class PrefetchFile:
 
         self.run_count = struct.unpack("<I", self.data[152:156])[0]
 
-        # Parse filename strings
         self._parse_filename_strings(section_c_offset, section_c_length)
-
-        # Parse volume info
         self._parse_volume_info_v23(section_d_offset, section_d_entries)
 
     def _parse_v26(self) -> None:
@@ -509,10 +497,7 @@ class PrefetchFile:
 
         self.run_count = struct.unpack("<I", self.data[200:204])[0] if len(self.data) > 204 else 0
 
-        # Parse filename strings
         self._parse_filename_strings(section_c_offset, section_c_length)
-
-        # Parse volume info
         self._parse_volume_info_v26(section_d_offset, section_d_entries)
 
     def _parse_v30(self) -> None:
@@ -692,10 +677,7 @@ class PrefetchParser(BaseParser):
         """
         pf = PrefetchFile(data)
 
-        # Determine the most recent run time for timestamp
         timestamp = pf.last_run_times[0] if pf.last_run_times else None
-
-        # Build record data
         record_data: dict[str, Any] = {
             "executable_name": pf.executable_name,
             "prefetch_hash": f"{pf.prefetch_hash:08X}",
@@ -703,18 +685,15 @@ class PrefetchParser(BaseParser):
             "run_count": pf.run_count,
         }
 
-        # Add all run times
         if pf.last_run_times:
             record_data["last_run_times"] = [
                 t.isoformat() for t in pf.last_run_times
             ]
 
-        # Add file references (limit to first 100 for readability)
         if pf.file_references:
             record_data["file_count"] = len(pf.file_references)
             record_data["file_references"] = pf.file_references[:100]
 
-        # Add volume info
         if pf.volume_info:
             record_data["volumes"] = []
             for vol in pf.volume_info:
@@ -723,7 +702,6 @@ class PrefetchParser(BaseParser):
                     vol_entry["creation_time"] = vol["creation_time"].isoformat()
                 record_data["volumes"].append(vol_entry)
 
-        # Create record ID
         record_id = self.create_record_id(
             "prefetch",
             pf.executable_name,

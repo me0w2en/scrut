@@ -67,7 +67,6 @@ def create(
     case_path: Path = ctx.obj.get("case_path", Path.cwd())
 
     try:
-        # Load case info
         case_manager = CaseManager(case_path)
         case_info = case_manager.get_case_info()
 
@@ -81,10 +80,8 @@ def create(
             ctx.exit(1)
             return
 
-        # Get targets
         targets = case_manager.list_targets()
 
-        # Create bundle
         creator = BundleCreator(case_path)
         bundle = creator.create_bundle(
             output_path=output_path,
@@ -96,7 +93,6 @@ def create(
             include_commands_since=since,
         )
 
-        # Output result
         result = {
             "status": "created",
             "bundle_id": str(bundle.bundle_id),
@@ -142,7 +138,6 @@ def verify(ctx: click.Context, bundle_path: Path) -> None:
         verifier = BundleVerifier(bundle_path)
         results = verifier.verify_integrity()
 
-        # Add manifest info to output
         manifest = verifier.load_manifest()
         if manifest:
             results["bundle_id"] = str(manifest.bundle_id)

@@ -78,7 +78,6 @@ class RDPBitmapCacheParser:
         elif self.filename.endswith(".bmc"):
             self._parse_legacy_bmc()
         else:
-            # Try to detect format
             self._parse_cache_bin()
 
     def _parse_rdp8(self) -> None:
@@ -230,7 +229,6 @@ class RDPDefaultParser:
     def _parse(self) -> None:
         """Parse Default.rdp file."""
         try:
-            # Try different encodings
             try:
                 text = self.data.decode("utf-16-le")
             except UnicodeDecodeError:

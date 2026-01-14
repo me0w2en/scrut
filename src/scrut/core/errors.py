@@ -140,13 +140,11 @@ def handle_error(error: ScrutError | Exception, exit_code: int = 1) -> NoReturn:
         error: The error to handle
         exit_code: Exit code to use
     """
-    # Import here to avoid circular import
     from scrut.cli.output import output_error
 
     if isinstance(error, ScrutError):
         output_error(error.to_structured())
     else:
-        # Wrap unexpected errors
         structured = StructuredError(
             code=ErrorCode.INTERNAL_ERROR,
             message=str(error),

@@ -327,14 +327,12 @@ class MFTParser:
 
         record = bytearray(self.data[offset:offset + self.record_size])
 
-        # Check signature
         signature = bytes(record[:4])
         if signature == BAAD_SIGNATURE:
             return None
         if signature != MFT_SIGNATURE:
             return None
 
-        # Apply fixup
         if not self._apply_fixup(record):
             return None
 
@@ -362,7 +360,6 @@ class MFTParser:
         filenames: list[FileName] = []
         data_streams: list[DataAttribute] = []
 
-        # Parse attributes
         pos = first_attr
         while pos < used_size and pos + 4 <= len(record):
             attr_type = struct.unpack("<I", record[pos:pos + 4])[0]
@@ -474,19 +471,14 @@ class MFTFileParser(BaseParser):
         parser = MFTParser(data)
 
         for entry in parser.parse_all():
-            # Skip entries without useful data
             if not entry.standard_info and not entry.filenames:
                 continue
 
-            # Get primary filename
             primary_name = entry.primary_name or f"<MFT Entry {entry.record_number}>"
-
-            # Get parent path (we'd need full MFT to resolve this)
             parent_ref = None
             if entry.filenames:
                 parent_ref = entry.filenames[0].parent_ref
 
-            # Build record data
             record_data: dict[str, Any] = {
                 "record_number": entry.record_number,
                 "sequence": entry.sequence,
@@ -516,26 +508,22 @@ class MFTFileParser(BaseParser):
                 record_data["file_size"] = fn.real_size
                 record_data["allocated_size"] = fn.alloc_size
 
-            # Add alternate data streams
             if entry.data_streams:
                 ads = [ds.name for ds in entry.data_streams if ds.name != "$DATA"]
                 if ads:
                     record_data["alternate_data_streams"] = ads
 
-            # Determine best timestamp for the record
             timestamp = None
             if entry.standard_info and entry.standard_info.modified:
                 timestamp = entry.standard_info.modified
             elif entry.filenames and entry.filenames[0].modified:
                 timestamp = entry.filenames[0].modified
 
-            # Create evidence ref
             evidence_ref = self.create_evidence_ref(
                 record_offset=entry.record_number * MFT_RECORD_SIZE,
                 record_index=entry.record_number,
             )
 
-            # Create record ID
             fname = entry.filenames[0].name if entry.filenames else f"entry_{entry.record_number}"
             record_id = self.create_record_id("mft", entry.record_number, fname)
 

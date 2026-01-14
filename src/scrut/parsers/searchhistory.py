@@ -48,7 +48,6 @@ class SearchHistoryParser:
         if len(self.data) < 100:
             return
 
-        # Parse different sources
         self._parse_wordwheelquery()
         self._parse_typedpaths()
         self._parse_runmru()
@@ -66,15 +65,11 @@ class SearchHistoryParser:
         # Find MRUListEx to get order
         mru_idx = self.data.find(b"MRUListEx", wwq_idx)
 
-        # Extract search terms
-        # They're stored as Unicode strings with numeric value names
-
         # Look for Unicode strings in the region
         search_start = wwq_idx
         search_end = min(search_start + 10000, len(self.data))
         chunk = self.data[search_start:search_end]
 
-        # Extract strings
         strings = self._extract_unicode_strings(chunk)
 
         for i, s in enumerate(strings):
@@ -109,8 +104,7 @@ class SearchHistoryParser:
         strings = self._extract_unicode_strings(chunk)
 
         for s in strings:
-            # Filter for paths
-            if (
+                if (
                 len(s) >= 3
                 and (s.startswith("C:") or s.startswith("\\\\") or "://" in s)
             ):
@@ -140,7 +134,6 @@ class SearchHistoryParser:
             if s.endswith("\\1"):
                 s = s[:-2]  # Remove \1 suffix
 
-            # Filter for commands (not registry keys)
             if (
                 len(s) >= 2
                 and not s.startswith("MRU")
@@ -223,7 +216,6 @@ class SearchHistoryFileParser(BaseParser):
                 "source_file": filename,
             }
 
-            # Analyze for suspicious searches
             risk_indicators = self._analyze_search(entry)
             if risk_indicators:
                 record_data["risk_indicators"] = risk_indicators
@@ -256,7 +248,6 @@ class SearchHistoryFileParser(BaseParser):
 
         query_lower = entry.query.lower()
 
-        # Sensitive file searches
         sensitive_patterns = [
             "password",
             "credential",
@@ -270,7 +261,6 @@ class SearchHistoryFileParser(BaseParser):
         if any(p in query_lower for p in sensitive_patterns):
             indicators.append("sensitive_search")
 
-        # Hacking tool searches
         hack_tools = [
             "mimikatz",
             "metasploit",
@@ -284,25 +274,19 @@ class SearchHistoryFileParser(BaseParser):
         if any(t in query_lower for t in hack_tools):
             indicators.append("hack_tool_search")
 
-        # Command execution (from RunMRU)
         if entry.source == "RunMRU":
-            # PowerShell commands
             if "powershell" in query_lower:
                 indicators.append("powershell_execution")
 
-            # CMD commands
             if "cmd" in query_lower:
                 indicators.append("cmd_execution")
 
-            # Network tools
             if any(t in query_lower for t in ["net ", "netsh", "ipconfig"]):
                 indicators.append("network_command")
 
-            # Remote tools
             if any(t in query_lower for t in ["mstsc", "psexec", "\\\\", "wmic"]):
                 indicators.append("remote_access")
 
-        # Network path access
         if entry.query.startswith("\\\\"):
             indicators.append("network_path")
 

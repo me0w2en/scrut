@@ -51,7 +51,6 @@ class StructuredError(BaseModel):
     model_config = {"extra": "forbid"}
 
 
-# Common error codes
 class ErrorCode:
     """Standard error codes for Scrut."""
 

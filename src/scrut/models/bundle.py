@@ -77,32 +77,26 @@ class BundleManifest(BaseModel):
     created_at: datetime = Field(..., description="Bundle creation timestamp")
     created_by: str = Field(..., description="Analyst who created the bundle")
 
-    # Environment
     environment: EnvironmentInfo = Field(
         ..., description="Environment information"
     )
 
-    # Targets
     targets: list[TargetReference] = Field(
         default_factory=list, description="Targets included in bundle"
     )
 
-    # Commands executed
     commands: list[CommandRecord] = Field(
         default_factory=list, description="Commands executed to produce results"
     )
 
-    # Results
     results: list[ResultReference] = Field(
         default_factory=list, description="Result files in bundle"
     )
 
-    # Hashes for verification
     bundle_hash: str | None = Field(
         None, description="SHA-256 hash of entire bundle directory"
     )
 
-    # Optional signing
     signature: str | None = Field(
         None, description="Digital signature of manifest"
     )

@@ -96,7 +96,6 @@ class RecentAppsParser:
         app_id_patterns = [
             # UWP app format
             rb"([A-Za-z0-9_\.\-]+![A-Za-z0-9_\.\-]+)",
-            # Executable path
             rb"([A-Za-z]:\\[^\x00]{5,260}\.exe)",
         ]
 
@@ -166,7 +165,6 @@ class RecentAppsParser:
                 and chunk[i + 2] == ord(":")
                 and chunk[i + 3] == 0
             ):
-                # Extract path
                 path = self._extract_unicode_string(chunk, i)
                 if path and ".exe" in path.lower():
                     return path
@@ -231,7 +229,6 @@ class RecentAppsFileParser(BaseParser):
                 record_data["app_id"] = entry.app_id
             if entry.app_path:
                 record_data["app_path"] = entry.app_path
-                # Extract filename
                 try:
                     record_data["filename"] = Path(entry.app_path).name
                 except Exception:
@@ -241,7 +238,6 @@ class RecentAppsFileParser(BaseParser):
             if entry.launch_count:
                 record_data["launch_count"] = entry.launch_count
 
-            # Analyze for suspicious patterns
             risk_indicators = self._analyze_entry(entry)
             if risk_indicators:
                 record_data["risk_indicators"] = risk_indicators
@@ -273,7 +269,6 @@ class RecentAppsFileParser(BaseParser):
 
         path_lower = (entry.app_path or entry.app_id or "").lower()
 
-        # Suspicious locations
         suspicious_paths = [
             "\\temp\\",
             "\\tmp\\",
@@ -284,17 +279,14 @@ class RecentAppsFileParser(BaseParser):
         if any(p in path_lower for p in suspicious_paths):
             indicators.append("suspicious_path")
 
-        # Script hosts
         script_hosts = ["powershell", "cmd.exe", "wscript", "cscript", "mshta"]
         if any(h in path_lower for h in script_hosts):
             indicators.append("script_host")
 
-        # Remote tools
         remote_tools = ["psexec", "mstsc", "wmic", "winrm"]
         if any(t in path_lower for t in remote_tools):
             indicators.append("remote_tool")
 
-        # Hacking tools
         hack_tools = ["mimikatz", "procdump", "lazagne", "rubeus", "bloodhound"]
         if any(t in path_lower for t in hack_tools):
             indicators.append("potential_hack_tool")

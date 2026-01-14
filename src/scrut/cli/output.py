@@ -14,10 +14,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-# Type alias for output format
 OutputFormat = Literal["json", "jsonl", "human"]
 
-# Global output format (set by CLI)
 _output_format: OutputFormat = "json"
 
 
@@ -140,23 +138,19 @@ def output_human_table(
         file.write(f"\n{title}\n")
         file.write("=" * len(title) + "\n\n")
 
-    # Auto-detect columns if not specified
     if columns is None:
         columns = _auto_detect_columns(records)
 
-    # Calculate column widths
     widths = {col: len(col) for col in columns}
-    for record in records[:100]:  # Sample first 100 for width
+    for record in records[:100]:
         for col in columns:
             value = _get_nested_value(record, col)
             widths[col] = min(max_width, max(widths[col], len(str(value))))
 
-    # Print header
     header = " | ".join(col.ljust(widths[col])[:widths[col]] for col in columns)
     file.write(header + "\n")
     file.write("-" * len(header) + "\n")
 
-    # Print rows
     for record in records:
         row = []
         for col in columns:
@@ -178,15 +172,12 @@ def _auto_detect_columns(records: list[dict[str, Any]]) -> list[str]:
 
     first = records[0]
 
-    # Check for parsed record with 'data' field
     if "data" in first and isinstance(first["data"], dict):
         data = first["data"]
 
-        # EVTX records
         if "event_id" in data:
             return ["timestamp", "data.event_id", "data.channel", "data.record_number"]
 
-        # Prefetch records
         if "executable_name" in data:
             return [
                 "timestamp",
@@ -195,11 +186,9 @@ def _auto_detect_columns(records: list[dict[str, Any]]) -> list[str]:
                 "data.last_run_time",
             ]
 
-        # Registry records
         if "key_path" in data:
             return ["data.key_path", "data.value_name", "data.value_type", "data.value_data"]
 
-    # Default: show top-level keys
     return list(first.keys())[:6]
 
 
@@ -254,7 +243,6 @@ def output(data: Any, format: OutputFormat | None = None, **kwargs: Any) -> None
     if format == "json":
         output_json(data, **kwargs)
     elif format == "jsonl":
-        # For single objects, just output as JSON
         if not hasattr(data, "__iter__") or isinstance(data, (dict, str)):
             output_json(data, **kwargs)
         else:
@@ -317,7 +305,6 @@ class OutputFormatter:
             data: Data to output to stdout
         """
         if self.format == "human":
-            # Buffer records for table output
             if isinstance(data, BaseModel):
                 self._buffer.append(data.model_dump(mode="json"))
             elif isinstance(data, dict):

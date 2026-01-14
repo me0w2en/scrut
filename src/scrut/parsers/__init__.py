@@ -1,6 +1,5 @@
 """Forensic artifact parsers for Scrut DFIR CLI."""
 
-# Import parsers to register them
 from scrut.parsers import (
     amcache,  # noqa: F401
     browser,  # noqa: F401

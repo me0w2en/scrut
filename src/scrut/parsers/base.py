@@ -17,7 +17,6 @@ class BaseParser(ABC):
     into normalized ParsedRecord instances with evidence provenance.
     """
 
-    # Parser metadata (must be set by subclasses)
     name: ClassVar[str]
     version: ClassVar[str]
     supported_artifacts: ClassVar[list[str]]
@@ -94,11 +93,9 @@ class BaseParser(ABC):
         if ts is None:
             return None
 
-        # Ensure timezone-aware
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=UTC)
 
-        # Convert to UTC for storage
         return ts.astimezone(UTC)
 
     def create_record_id(self, *components: Any) -> str:

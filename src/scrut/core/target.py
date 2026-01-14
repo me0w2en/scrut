@@ -133,17 +133,13 @@ class TargetManager:
                 remediation="Verify the path exists and is accessible",
             )
 
-        # Load case ID
         case_id = self._load_case_id()
 
-        # Auto-detect type if not specified
         if target_type is None:
             target_type = self._detect_type(path)
 
-        # Calculate hash and size
         hash_sha256, size_bytes = self._compute_hash_and_size(path)
 
-        # Create target
         target = Target(
             case_id=case_id,
             name=name,
@@ -155,7 +151,6 @@ class TargetManager:
             metadata=metadata,
         )
 
-        # Load existing targets and add new one
         targets = self._load_targets()
         targets.append(target)
         self._save_targets(targets)
@@ -205,17 +200,14 @@ class TargetManager:
             Detected TargetType
         """
         if path.is_dir():
-            # Check for known collection patterns
             if (path / ".velociraptor").exists():
                 return TargetType.COLLECTION
             return TargetType.FOLDER
 
-        # Check file extension for image types
         suffix = path.suffix.lower()
         if suffix in {".e01", ".ex01", ".raw", ".dd", ".vmdk", ".vhd", ".vhdx"}:
             return TargetType.IMAGE
 
-        # Default to folder for single files (will be treated as evidence folder)
         return TargetType.FOLDER
 
     def _compute_hash_and_size(self, path: Path) -> tuple[str, int]:
@@ -236,7 +228,6 @@ class TargetManager:
                     hasher.update(chunk)
                     total_size += len(chunk)
         else:
-            # For directories, hash all files recursively
             for file_path in sorted(path.rglob("*")):
                 if file_path.is_file():
                     with open(file_path, "rb") as f:

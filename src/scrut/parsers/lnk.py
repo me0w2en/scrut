@@ -142,22 +142,18 @@ class LnkParser:
         if len(self.data) < 76:
             return
 
-        # Verify signature
         if self.data[0:4] != LNK_SIGNATURE:
             return
 
-        # Verify GUID
         if self.data[4:20] != LNK_GUID:
             return
 
-        # Parse header
         link_flags = struct.unpack("<I", self.data[20:24])[0]
         file_attrs = struct.unpack("<I", self.data[24:28])[0]
 
         self.result.file_attributes = file_attrs
         self.result.is_directory = bool(file_attrs & FILE_ATTR_DIRECTORY)
 
-        # Timestamps
         self.result.created = _filetime_to_datetime(
             struct.unpack("<Q", self.data[28:36])[0]
         )
@@ -168,7 +164,6 @@ class LnkParser:
             struct.unpack("<Q", self.data[44:52])[0]
         )
 
-        # File size
         self.result.file_size = struct.unpack("<I", self.data[52:56])[0]
 
         # Icon index and show command at 56-64
@@ -237,7 +232,6 @@ class LnkParser:
         common_network_relative_link_offset = struct.unpack("<I", data[20:24])[0]
         common_path_suffix_offset = struct.unpack("<I", data[24:28])[0]
 
-        # Local path info
         if link_info_flags & 0x01:  # VolumeIDAndLocalBasePath
             if volume_id_offset > 0 and volume_id_offset + 16 <= len(data):
                 vol_data = data[volume_id_offset:]
@@ -269,7 +263,6 @@ class LnkParser:
                     except Exception:
                         pass
 
-        # Network path info
         if link_info_flags & 0x02:  # CommonNetworkRelativeLink
             if common_network_relative_link_offset > 0:
                 net_offset = common_network_relative_link_offset
@@ -301,7 +294,6 @@ class LnkParser:
                             except Exception:
                                 pass
 
-        # Common path suffix
         if common_path_suffix_offset > 0 and common_path_suffix_offset < len(data):
             suffix_data = data[common_path_suffix_offset:]
             null_pos = suffix_data.find(b"\x00")
@@ -313,7 +305,6 @@ class LnkParser:
                 except Exception:
                     pass
 
-        # Combine paths
         if self.result.network_share_name and self.result.common_path_suffix:
             self.result.target_path = (
                 self.result.network_share_name + self.result.common_path_suffix
@@ -388,7 +379,6 @@ class LnkFileParser(BaseParser):
         parser = LnkParser(data)
         lnk = parser.result
 
-        # Build record data
         record_data: dict[str, Any] = {}
 
         if lnk.target_path:
@@ -406,7 +396,6 @@ class LnkFileParser(BaseParser):
         if lnk.name:
             record_data["description"] = lnk.name
 
-        # Target timestamps
         if lnk.created:
             record_data["target_created"] = lnk.created.isoformat()
         if lnk.modified:
@@ -417,7 +406,6 @@ class LnkFileParser(BaseParser):
         record_data["target_size"] = lnk.file_size
         record_data["is_directory"] = lnk.is_directory
 
-        # Volume info
         if lnk.volume_label:
             record_data["volume_label"] = lnk.volume_label
         if lnk.drive_serial:

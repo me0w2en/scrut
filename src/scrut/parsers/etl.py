@@ -130,7 +130,6 @@ class ETLParser:
 
                 self.buffers.append(buffer)
 
-                # Parse events within buffer
                 event_offset = offset + 68  # After buffer header
                 buffer_end = offset + buffer.saved_offset
 
@@ -329,7 +328,6 @@ class ETLFileParser(BaseParser):
                 "source_file": filename,
             }
 
-            # Add data preview if not too large
             if event.data and len(event.data) > 0:
                 record_data["data_size"] = len(event.data)
                 # Try to decode as string for preview
@@ -368,7 +366,6 @@ class ETLFileParser(BaseParser):
 
             record_index += 1
 
-        # Emit summary record
         if parser.buffers:
             summary_data = {
                 "summary": True,
@@ -377,13 +374,11 @@ class ETLFileParser(BaseParser):
                 "source_file": filename,
             }
 
-            # Get time range
             timestamps = [e.timestamp for e in parser.events if e.timestamp]
             if timestamps:
                 summary_data["earliest_event"] = min(timestamps).isoformat()
                 summary_data["latest_event"] = max(timestamps).isoformat()
 
-            # Provider distribution
             providers = {}
             for event in parser.events:
                 key = event.provider_name or event.provider_guid

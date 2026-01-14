@@ -34,7 +34,6 @@ def get_environment_info() -> EnvironmentInfo:
     """
     import sys
 
-    # Filter relevant environment variables
     relevant_vars = {
         "TZ",
         "LANG",
@@ -84,7 +83,6 @@ def compute_directory_hash(dir_path: Path) -> str:
 
     for file_path in sorted(dir_path.rglob("*")):
         if file_path.is_file():
-            # Include relative path in hash
             rel_path = file_path.relative_to(dir_path)
             sha256.update(str(rel_path).encode())
             sha256.update(compute_file_hash(file_path).encode())
@@ -131,12 +129,10 @@ class BundleCreator:
         bundle_id = uuid4()
         created_at = datetime.now(UTC)
 
-        # Create bundle directory
         output_path.mkdir(parents=True, exist_ok=True)
         results_dir = output_path / "results"
         results_dir.mkdir(exist_ok=True)
 
-        # Copy result files and compute hashes
         result_refs: list[ResultReference] = []
         if result_files:
             for result_file in result_files:
@@ -144,7 +140,6 @@ class BundleCreator:
                     dest = results_dir / result_file.name
                     shutil.copy2(result_file, dest)
 
-                    # Count records in JSONL file
                     record_count = 0
                     try:
                         with open(result_file, encoding="utf-8") as f:
@@ -163,7 +158,6 @@ class BundleCreator:
                         )
                     )
 
-        # Build target references
         target_refs: list[TargetReference] = []
         if targets:
             for t in targets:
@@ -180,14 +174,12 @@ class BundleCreator:
                     )
                 )
 
-        # Get command history
         commands: list[CommandRecord] = []
         if include_commands_since:
             commands = self.history.get_history_since(include_commands_since)
         else:
             commands = self.history.get_history()
 
-        # Create manifest
         manifest = BundleManifest(
             bundle_id=bundle_id,
             case_id=case_id,
@@ -200,15 +192,12 @@ class BundleCreator:
             results=result_refs,
         )
 
-        # Write manifest
         manifest_path = output_path / "manifest.json"
         with open(manifest_path, "w", encoding="utf-8") as f:
             f.write(manifest.model_dump_json(indent=2))
 
-        # Compute bundle hash
         manifest.bundle_hash = compute_directory_hash(output_path)
 
-        # Update manifest with hash
         with open(manifest_path, "w", encoding="utf-8") as f:
             f.write(manifest.model_dump_json(indent=2))
 
@@ -284,7 +273,6 @@ class BundleVerifier:
 
         results["manifest_valid"] = True
 
-        # Verify result file hashes
         results_dir = self.bundle_path / "results"
         for result_ref in manifest.results:
             result_path = results_dir / result_ref.filename
@@ -301,14 +289,9 @@ class BundleVerifier:
                     f"expected {result_ref.hash}, got {actual_hash}"
                 )
 
-        # Verify bundle hash (excluding manifest itself for this check)
         if manifest.bundle_hash:
-            # Temporarily remove bundle_hash from manifest for verification
-            # since it was computed before adding itself
             actual_hash = compute_directory_hash(self.bundle_path)
-            # Note: This may not match exactly due to manifest update
-            # A more robust approach would exclude manifest from hash
-            results["bundle_hash_valid"] = True  # Simplified for now
+            results["bundle_hash_valid"] = True
 
         results["valid"] = (
             results["manifest_valid"]

@@ -36,12 +36,10 @@ class RawReader(ImageReader):
         """Find all segment files for split images."""
         self._segment_files = [self.path]
 
-        # Check for split file patterns
         suffix = self.path.suffix.lower()
         parent = self.path.parent
         stem = self.path.stem
 
-        # Pattern 1: .001, .002, .003, ...
         if suffix == ".001" or (len(suffix) == 4 and suffix[1:].isdigit()):
             num = 2
             while True:
@@ -52,11 +50,9 @@ class RawReader(ImageReader):
                 else:
                     break
 
-        # Pattern 2: .aa, .ab, .ac, ...
         elif len(suffix) == 3 and suffix[1:].isalpha():
             chars = list(suffix[1:])
             while True:
-                # Increment letter combination
                 chars[1] = chr(ord(chars[1]) + 1)
                 if chars[1] > "z":
                     chars[1] = "a"
@@ -70,13 +66,10 @@ class RawReader(ImageReader):
                 else:
                     break
 
-        # Calculate segment sizes
         self._segment_sizes = [f.stat().st_size for f in self._segment_files]
 
     def _open(self) -> None:
         """Open the image file."""
-        # For single file, just open it
-        # For split files, we'll open on demand
         if len(self._segment_files) == 1:
             self._file_handle = open(self._segment_files[0], "rb")
 
@@ -113,25 +106,20 @@ class RawReader(ImageReader):
             Raw bytes
         """
         if len(self._segment_files) == 1:
-            # Single file - simple read
             self._file_handle.seek(offset)
             return self._file_handle.read(size)
 
-        # Multiple segments - need to handle crossing boundaries
         result = bytearray()
         remaining = size
         current_offset = offset
 
         while remaining > 0:
-            # Find which segment contains this offset
             segment_idx, offset_in_segment = self._find_segment(current_offset)
 
             if segment_idx >= len(self._segment_files):
-                # Beyond end of image
                 result.extend(b"\x00" * remaining)
                 break
 
-            # Read from this segment
             segment_size = self._segment_sizes[segment_idx]
             available = segment_size - offset_in_segment
             to_read = min(remaining, available)
@@ -161,17 +149,14 @@ class RawReader(ImageReader):
                 return i, offset - cumulative
             cumulative += seg_size
 
-        # Beyond last segment
         return len(self._segment_files), 0
 
     def get_partitions(self) -> list[dict]:
         """Get partition table information."""
-        # Read MBR (first sector)
         mbr = self.read_sectors(0, 1)
 
         partitions = []
 
-        # Check for MBR signature
         if len(mbr) >= 512 and mbr[510:512] == b"\x55\xaa":
             for i in range(4):
                 entry_offset = 446 + i * 16
