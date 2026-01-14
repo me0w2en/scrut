@@ -112,7 +112,6 @@ class NetworkConfigParser:
         elif self.hive_type.upper() == "SOFTWARE":
             self._parse_profiles()
         else:
-            # Try both
             self._parse_interfaces()
             self._parse_profiles()
 
@@ -186,7 +185,6 @@ class NetworkConfigParser:
         end = min(len(self.data), idx + 4096)
         chunk = self.data[start:end]
 
-        # Extract values (search for Unicode value names)
         ip_address = self._find_ip_value(chunk, b"IPAddress")
         subnet_mask = self._find_ip_value(chunk, b"SubnetMask")
         default_gateway = self._find_ip_value(chunk, b"DefaultGateway")
@@ -194,10 +192,7 @@ class NetworkConfigParser:
         dns_servers = self._find_multi_ip_value(chunk, b"NameServer")
         domain = self._find_string_value(chunk, b"Domain")
 
-        # DHCP enabled check
         dhcp_enabled = self._find_dword_value(chunk, b"EnableDHCP")
-
-        # Lease times
         lease_obtained = self._find_filetime_value(chunk, b"LeaseObtainedTime")
         lease_expires = self._find_filetime_value(chunk, b"LeaseTerminatesTime")
 
@@ -260,13 +255,11 @@ class NetworkConfigParser:
         end = min(len(self.data), idx + 2048)
         chunk = self.data[start:end]
 
-        # Extract values
         profile_name = self._find_string_value(chunk, b"ProfileName")
         description = self._find_string_value(chunk, b"Description")
         category = self._find_dword_value(chunk, b"Category")
         managed = self._find_dword_value(chunk, b"Managed")
 
-        # Timestamps
         date_created = self._find_filetime_value(chunk, b"DateCreated")
         date_last_connected = self._find_filetime_value(chunk, b"DateLastConnected")
 
@@ -299,7 +292,6 @@ class NetworkConfigParser:
         search_end = min(search_start + 500, len(chunk))
         sub_chunk = chunk[search_start:search_end]
 
-        # Extract Unicode string
         strings = []
         i = 0
         current = []
@@ -327,7 +319,6 @@ class NetworkConfigParser:
     def _find_ip_value(self, chunk: bytes, name: bytes) -> str:
         """Find IP address value."""
         s = self._find_string_value(chunk, name)
-        # Validate IP-like format
         if s and re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", s):
             return s
         return ""
@@ -338,7 +329,6 @@ class NetworkConfigParser:
         if not s:
             return []
 
-        # Split by comma or space
         parts = re.split(r"[,\s]+", s)
         ips = []
         for part in parts:
@@ -417,7 +407,6 @@ class NetworkConfigFileParser(BaseParser):
         with open(file_path, "rb") as f:
             data = f.read()
 
-        # Determine hive type from filename
         filename = file_path.name.upper()
         if "SYSTEM" in filename:
             hive_type = "SYSTEM"
@@ -436,7 +425,6 @@ class NetworkConfigFileParser(BaseParser):
 
         record_index = 0
 
-        # Emit interface records
         for interface in parser.interfaces:
             record_data: dict[str, Any] = {
                 "record_type": "network_interface",
@@ -482,7 +470,6 @@ class NetworkConfigFileParser(BaseParser):
 
             record_index += 1
 
-        # Emit profile records
         for profile in parser.profiles:
             record_data = {
                 "record_type": "network_profile",

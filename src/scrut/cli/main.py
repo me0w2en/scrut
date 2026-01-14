@@ -103,21 +103,15 @@ def cli(
         "case_path": case_path,
         "formatter": OutputFormatter(format=format),
     }
-
-    # Configure global settings
     set_output_format(format)
     set_verbose(verbose)
     configure_logging(log_format=log_format, quiet=quiet)
 
-
-# Register command groups
 cli.add_command(case)
 cli.add_command(target)
 cli.add_command(parse)
 cli.add_command(bundle)
 
-
-# Exit codes
 EXIT_SUCCESS = 0
 EXIT_ERROR = 1
 EXIT_INVALID_ARGS = 2

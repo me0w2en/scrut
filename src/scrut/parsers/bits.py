@@ -187,7 +187,6 @@ class BITSQueueParser:
 
     def _extract_from_strings(self) -> None:
         """Extract BITS jobs from embedded strings."""
-        # Extract all meaningful strings
         strings = self._extract_strings()
 
         urls = []
@@ -208,7 +207,6 @@ class BITSQueueParser:
             elif "\\" in s and len(s.split("\\")) == 2:
                 users.append(s)
 
-        # Create job entries from extracted data
         if urls:
             for i, url in enumerate(urls):
                 job_id = guids[i] if i < len(guids) else f"{{unknown-{i}}}"
@@ -230,7 +228,6 @@ class BITSQueueParser:
         """Extract ASCII and Unicode strings."""
         strings = []
 
-        # ASCII strings
         ascii_pattern = re.compile(rb"[\x20-\x7e]{%d,}" % min_length)
         for match in ascii_pattern.finditer(self.data):
             try:
@@ -324,7 +321,6 @@ class BITSFileParser(BaseParser):
             if job.files:
                 record_data["files"] = job.files
 
-            # Analyze for suspicious patterns
             risk_indicators = self._analyze_job(job)
             if risk_indicators:
                 record_data["risk_indicators"] = risk_indicators
@@ -356,7 +352,6 @@ class BITSFileParser(BaseParser):
         url_lower = job.source_url.lower() if job.source_url else ""
         path_lower = job.target_path.lower() if job.target_path else ""
 
-        # Suspicious file extensions
         suspicious_extensions = [
             ".exe",
             ".dll",
@@ -372,7 +367,6 @@ class BITSFileParser(BaseParser):
         if any(url_lower.endswith(ext) for ext in suspicious_extensions):
             indicators.append("executable_download")
 
-        # Suspicious target locations
         suspicious_paths = [
             "\\temp\\",
             "\\tmp\\",
@@ -387,7 +381,6 @@ class BITSFileParser(BaseParser):
         if re.search(r"https?://\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", url_lower):
             indicators.append("ip_based_url")
 
-        # Non-standard ports
         if re.search(r":\d{4,5}/", url_lower):
             port_match = re.search(r":(\d{4,5})/", url_lower)
             if port_match:
@@ -395,7 +388,6 @@ class BITSFileParser(BaseParser):
                 if port not in [80, 443, 8080, 8443]:
                     indicators.append("non_standard_port")
 
-        # Encoded or obfuscated URLs
         if "%" in url_lower and url_lower.count("%") > 3:
             indicators.append("encoded_url")
 

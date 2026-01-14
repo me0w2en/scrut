@@ -10,7 +10,6 @@ import time
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-# Global settings
 _verbose = False
 _quiet = False
 _log_format: Literal["text", "json"] = "text"
@@ -127,7 +126,6 @@ class ProgressReporter:
 
         self.current += amount
 
-        # Throttle updates to avoid flooding stderr
         now = time.perf_counter()
         if now - self._last_update < 0.1:  # Max 10 updates/second
             return

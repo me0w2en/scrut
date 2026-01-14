@@ -139,7 +139,6 @@ class OLECompoundFile:
         self.header.minor_version = struct.unpack("<H", self.data[0x18:0x1A])[0]
         self.header.major_version = struct.unpack("<H", self.data[0x1A:0x1C])[0]
 
-        # Sector size
         sector_shift = struct.unpack("<H", self.data[0x1E:0x20])[0]
         self.header.sector_size = 1 << sector_shift
 
@@ -164,7 +163,6 @@ class OLECompoundFile:
         # Build FAT
         self._build_fat()
 
-        # Parse directory
         self._parse_directory()
 
         # Build mini stream
@@ -224,7 +222,6 @@ class OLECompoundFile:
         if len(data) < 128:
             return None
 
-        # Name length
         name_len = struct.unpack("<H", data[0x40:0x42])[0]
         if name_len == 0:
             return None
@@ -392,7 +389,6 @@ class JumpListParser:
         if len(data) < 32:
             return
 
-        # Header
         version = struct.unpack("<I", data[0:4])[0]
         num_entries = struct.unpack("<I", data[4:8])[0]
         num_pinned = struct.unpack("<I", data[8:12])[0]

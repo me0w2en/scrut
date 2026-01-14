@@ -70,7 +70,6 @@ class ShimCacheParser:
         if len(self.data) < 4:
             return
 
-        # Try to detect format
         magic = struct.unpack("<I", self.data[0:4])[0]
 
         if magic == WINXP_MAGIC:
@@ -151,7 +150,6 @@ class ShimCacheParser:
             )
             file_size = struct.unpack("<Q", self.data[offset + 16:offset + 24])[0]
 
-            # Get path from offset
             if path_offset + path_length <= len(self.data):
                 try:
                     path = self.data[path_offset:path_offset + path_length].decode(
@@ -196,7 +194,6 @@ class ShimCacheParser:
             # Data size and offset
             data_size = struct.unpack("<I", self.data[offset + 16:offset + 20])[0]
 
-            # Get path
             if path_offset + path_length <= len(self.data):
                 try:
                     path = self.data[path_offset:path_offset + path_length].decode(

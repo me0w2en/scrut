@@ -80,10 +80,8 @@ class CaseManager:
                 remediation="Use a different directory or remove existing case",
             )
 
-        # Create case directory
         self.base_path.mkdir(parents=True, exist_ok=True)
 
-        # Create case instance
         case = Case(
             name=name,
             description=description,
@@ -92,7 +90,6 @@ class CaseManager:
             tags=tags or [],
         )
 
-        # Save to disk
         self._save(case)
 
         return case
@@ -116,7 +113,6 @@ class CaseManager:
         with open(self.case_file) as f:
             data = json.load(f)
 
-        # Convert status string to enum
         data["status"] = CaseStatus(data["status"])
 
         return Case(**data)

@@ -177,7 +177,6 @@ class SRUMParser:
 
                 offset = pos + len(pattern)
 
-        # Create entries for found applications
         for app_path in found_apps:
             if len(app_path) > 200 or "\x00" in app_path:
                 continue

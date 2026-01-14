@@ -29,7 +29,6 @@ class MetricsCollector:
         self.start_time: float | None = None
         self.end_time: float | None = None
 
-        # Counters
         self.records_processed = 0
         self.records_output = 0
         self.bytes_read = 0

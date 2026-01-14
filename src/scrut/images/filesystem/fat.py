@@ -13,7 +13,6 @@ from typing import BinaryIO
 
 from scrut.images.filesystem.base import FileInfo, FileStream, FilesystemReader
 
-# FAT attribute flags
 FAT_ATTR_READ_ONLY = 0x01
 FAT_ATTR_HIDDEN = 0x02
 FAT_ATTR_SYSTEM = 0x04
@@ -22,7 +21,6 @@ FAT_ATTR_DIRECTORY = 0x10
 FAT_ATTR_ARCHIVE = 0x20
 FAT_ATTR_LONG_NAME = 0x0F
 
-# Special cluster values
 FAT12_EOC = 0x0FF8
 FAT16_EOC = 0xFFF8
 FAT32_EOC = 0x0FFFFFF8
@@ -86,7 +84,6 @@ class FATReader(FilesystemReader):
         """Parse FAT boot sector (BPB)."""
         boot_data = self._read_bytes(0, 512)
 
-        # Basic BPB fields
         bytes_per_sector = struct.unpack("<H", boot_data[11:13])[0]
         sectors_per_cluster = boot_data[13]
         reserved_sectors = struct.unpack("<H", boot_data[14:16])[0]
@@ -98,16 +95,13 @@ class FATReader(FilesystemReader):
 
         total_sectors = total_sectors_32 if total_sectors_16 == 0 else total_sectors_16
 
-        # FAT32 specific fields
         if sectors_per_fat_16 == 0:
-            # FAT32
             sectors_per_fat = struct.unpack("<I", boot_data[36:40])[0]
             root_cluster = struct.unpack("<I", boot_data[44:48])[0]
             fat_type = "FAT32"
         else:
             sectors_per_fat = sectors_per_fat_16
             root_cluster = 0
-            # Determine FAT12 vs FAT16
             root_dir_sectors = ((root_entry_count * 32) + (bytes_per_sector - 1)) // bytes_per_sector
             data_sectors = total_sectors - (reserved_sectors + fat_count * sectors_per_fat + root_dir_sectors)
             cluster_count = data_sectors // sectors_per_cluster
@@ -129,13 +123,11 @@ class FATReader(FilesystemReader):
             fat_type=fat_type,
         )
 
-        # Calculate offsets
         self._fat_start = reserved_sectors * bytes_per_sector
 
         if fat_type == "FAT32":
             self._data_start = self._fat_start + fat_count * sectors_per_fat * bytes_per_sector
         else:
-            # FAT12/16: root directory comes before data area
             self._root_dir_start = self._fat_start + fat_count * sectors_per_fat * bytes_per_sector
             root_dir_size = root_entry_count * 32
             self._data_start = self._root_dir_start + root_dir_size
@@ -193,7 +185,6 @@ class FATReader(FilesystemReader):
         chain = [start_cluster]
         current = start_cluster
 
-        # Limit chain length to prevent infinite loops
         max_clusters = self._boot_sector.total_sectors // self._boot_sector.sectors_per_cluster
 
         while len(chain) < max_clusters:
@@ -263,15 +254,13 @@ class FATReader(FilesystemReader):
 
         first_byte = data[0]
 
-        # Check for empty or deleted entry
-        if first_byte == 0x00:  # End of directory
+        if first_byte == 0x00:
             return None
-        if first_byte == 0xE5:  # Deleted entry
+        if first_byte == 0xE5:
             return None
 
         attributes = data[11]
 
-        # Check for long filename entry (skip for now)
         if attributes == FAT_ATTR_LONG_NAME:
             return FATDirectoryEntry(
                 name="",
@@ -286,26 +275,21 @@ class FATReader(FilesystemReader):
                 is_long_name=True,
             )
 
-        # Volume label - skip
         if attributes & FAT_ATTR_VOLUME_ID:
             return None
 
-        # Short filename
         name = data[0:8].decode("cp437", errors="ignore").rstrip()
         extension = data[8:11].decode("cp437", errors="ignore").rstrip()
 
-        # Handle special first character
         if first_byte == 0x05:
             name = "\xe5" + name[1:]
 
-        # Timestamps
         created_time_raw = struct.unpack("<H", data[14:16])[0]
         created_date_raw = struct.unpack("<H", data[16:18])[0]
         accessed_date_raw = struct.unpack("<H", data[18:20])[0]
         modified_time_raw = struct.unpack("<H", data[22:24])[0]
         modified_date_raw = struct.unpack("<H", data[24:26])[0]
 
-        # Cluster (high word for FAT32)
         cluster_high = struct.unpack("<H", data[20:22])[0]
         cluster_low = struct.unpack("<H", data[26:28])[0]
 
@@ -334,7 +318,6 @@ class FATReader(FilesystemReader):
         entries = []
 
         if cluster == 0:
-            # Root directory for FAT12/16
             if self._boot_sector.fat_type in ("FAT12", "FAT16"):
                 root_size = self._boot_sector.root_entry_count * 32
                 data = self._read_bytes(self._root_dir_start, root_size)
@@ -351,10 +334,8 @@ class FATReader(FilesystemReader):
 
                 return entries
             else:
-                # FAT32 root directory
                 cluster = self._boot_sector.root_cluster
 
-        # Read directory from cluster chain
         chain = self._get_cluster_chain(cluster)
         long_name_parts: list[str] = []
 
@@ -377,7 +358,6 @@ class FATReader(FilesystemReader):
                     continue
 
                 if entry.is_long_name:
-                    # Collect long name parts
                     lfn_data = entry_data
                     seq = lfn_data[0] & 0x3F
                     chars = (
@@ -392,7 +372,6 @@ class FATReader(FilesystemReader):
                     else:
                         long_name_parts.insert(0, chars)
                 else:
-                    # Apply long name if we collected one
                     if long_name_parts:
                         entry.name = "".join(long_name_parts)
                         entry.extension = ""
@@ -415,7 +394,6 @@ class FATReader(FilesystemReader):
         path = path.replace("\\", "/").strip("/")
 
         if not path:
-            # Root directory
             return FATDirectoryEntry(
                 name="",
                 extension="",
@@ -446,7 +424,6 @@ class FATReader(FilesystemReader):
                 return None
 
             if i < len(components) - 1:
-                # Not the last component - must be a directory
                 if not found.is_directory:
                     return None
                 current_cluster = found.first_cluster
@@ -526,7 +503,6 @@ class FATReader(FilesystemReader):
 
         for dir_entry in entries:
             name = self._get_full_name(dir_entry)
-            # Skip . and .. entries
             if name not in (".", ".."):
                 yield name
 
@@ -553,7 +529,6 @@ class FATReader(FilesystemReader):
 
         yield path, sorted(dirs), sorted(files)
 
-        # Recurse into subdirectories
         for dir_name in dirs:
             child_path = f"{path}/{dir_name}" if path else dir_name
             yield from self.walk(child_path)

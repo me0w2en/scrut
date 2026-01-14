@@ -18,7 +18,6 @@ from uuid import UUID
 from scrut.models.record import ParsedRecord
 from scrut.parsers.base import BaseParser, ParserRegistry
 
-# Version of this parser
 PARSER_VERSION = "0.1.0"
 
 # Registry file signatures

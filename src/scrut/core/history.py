@@ -78,7 +78,6 @@ class HistoryManager:
             output_hash=output_hash,
         )
 
-        # Persist to history file
         self._append_record(record)
 
         self._current_command = None

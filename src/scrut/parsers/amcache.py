@@ -325,7 +325,6 @@ class AmcacheFileParser(BaseParser):
 
         record_index = 0
         for entry in parser.parse_all():
-            # Determine timestamp
             timestamp = None
             if entry.get("install_date"):
                 try:

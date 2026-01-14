@@ -107,10 +107,7 @@ class NotificationsParser:
             conn = sqlite3.connect(f"file:{tmp_path}?mode=ro", uri=True)
             conn.row_factory = sqlite3.Row
 
-            # Parse notification handlers
             self._parse_handlers_table(conn)
-
-            # Parse notifications
             self._parse_notifications_table(conn)
 
             conn.close()
@@ -167,7 +164,6 @@ class NotificationsParser:
                 FROM Notification
             """)
 
-            # Build handler lookup
             handler_lookup = {h.handler_id: h.primary_id for h in self.handlers}
 
             for row in cursor:
@@ -221,7 +217,6 @@ class NotificationsParser:
         if title_match:
             title = title_match.group(1)
 
-        # Find all text elements
         texts = re.findall(r"<text[^>]*>([^<]+)</text>", payload, re.IGNORECASE)
         if len(texts) > 1:
             body = texts[1]
@@ -305,7 +300,6 @@ class NotificationsFileParser(BaseParser):
 
         record_index = 0
 
-        # Emit notification records
         for notification in parser.notifications:
             record_data: dict[str, Any] = {
                 "notification_id": notification.notification_id,
@@ -354,7 +348,6 @@ class NotificationsFileParser(BaseParser):
 
             record_index += 1
 
-        # Emit handler records
         for handler in parser.handlers:
             record_data = {
                 "record_type": "notification_handler",
@@ -391,7 +384,6 @@ class NotificationsFileParser(BaseParser):
 
             record_index += 1
 
-        # Emit summary
         if parser.notifications or parser.handlers:
             summary_data = {
                 "summary": True,
@@ -400,7 +392,6 @@ class NotificationsFileParser(BaseParser):
                 "source_file": filename,
             }
 
-            # Get unique apps
             apps = set()
             for n in parser.notifications:
                 if n.app_name:

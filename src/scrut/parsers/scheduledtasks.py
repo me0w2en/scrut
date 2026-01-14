@@ -184,22 +184,18 @@ class XMLTaskParser:
         if reg_info is not None:
             self._parse_registration_info(reg_info, ns)
 
-        # Triggers
         triggers_elem = root.find("Triggers", ns) or root.find("task:Triggers", ns)
         if triggers_elem is not None:
             self._parse_triggers(triggers_elem, ns)
 
-        # Actions
         actions_elem = root.find("Actions", ns) or root.find("task:Actions", ns)
         if actions_elem is not None:
             self._parse_actions(actions_elem, ns)
 
-        # Principals
         principals_elem = root.find("Principals", ns) or root.find("task:Principals", ns)
         if principals_elem is not None:
             self._parse_principals(principals_elem, ns)
 
-        # Settings
         settings_elem = root.find("Settings", ns) or root.find("task:Settings", ns)
         if settings_elem is not None:
             self._parse_settings(settings_elem, ns)
@@ -249,12 +245,10 @@ class XMLTaskParser:
             for trig_elem in elem.findall(tag, ns) + elem.findall(f"task:{tag}", ns):
                 trigger = TaskTrigger(trigger_type=ttype)
 
-                # Enabled
                 enabled = trig_elem.find("Enabled", ns) or trig_elem.find("task:Enabled", ns)
                 if enabled is not None:
                     trigger.enabled = enabled.text.lower() == "true"
 
-                # Start boundary
                 start = trig_elem.find("StartBoundary", ns) or trig_elem.find("task:StartBoundary", ns)
                 if start is not None and start.text:
                     try:
@@ -264,7 +258,6 @@ class XMLTaskParser:
                     except ValueError:
                         pass
 
-                # End boundary
                 end = trig_elem.find("EndBoundary", ns) or trig_elem.find("task:EndBoundary", ns)
                 if end is not None and end.text:
                     try:
@@ -279,7 +272,6 @@ class XMLTaskParser:
                 if user is not None and user.text:
                     trigger.user_id = user.text
 
-                # Repetition
                 rep = trig_elem.find("Repetition", ns) or trig_elem.find("task:Repetition", ns)
                 if rep is not None:
                     interval = rep.find("Interval", ns) or rep.find("task:Interval", ns)
@@ -376,16 +368,9 @@ class JobFileParser:
         # App name offset at offset 20
         app_name_offset = struct.unpack("<H", self.data[20:22])[0]
 
-        # Trigger offset
         trigger_offset = struct.unpack("<H", self.data[22:24])[0]
-
-        # Error retry count
         error_retry_count = struct.unpack("<H", self.data[24:26])[0]
-
-        # Error retry interval
         error_retry_interval = struct.unpack("<H", self.data[26:28])[0]
-
-        # Idle deadline and wait
         idle_deadline = struct.unpack("<H", self.data[28:30])[0]
         idle_wait = struct.unpack("<H", self.data[30:32])[0]
 
@@ -417,7 +402,6 @@ class JobFileParser:
         # Parse variable-length section
         offset = 68
 
-        # Running instance count
         if offset + 2 <= len(self.data):
             running_count = struct.unpack("<H", self.data[offset:offset + 2])[0]
             offset += 2
@@ -429,22 +413,18 @@ class JobFileParser:
                 TaskAction(action_type="Exec", command=app_name)
             )
 
-        # Parameters
         params, offset = self._read_unicode_string(offset)
         if params and self.task.actions:
             self.task.actions[0].arguments = params
 
-        # Working directory
         workdir, offset = self._read_unicode_string(offset)
         if workdir and self.task.actions:
             self.task.actions[0].working_directory = workdir
 
-        # Author
         author, offset = self._read_unicode_string(offset)
         if author:
             self.task.author = author
 
-        # Comment
         comment, offset = self._read_unicode_string(offset)
         if comment:
             self.task.description = comment
@@ -459,7 +439,6 @@ class JobFileParser:
             reserved_len = struct.unpack("<H", self.data[offset:offset + 2])[0]
             offset += 2 + reserved_len
 
-        # Triggers
         if offset + 2 <= len(self.data):
             trigger_count = struct.unpack("<H", self.data[offset:offset + 2])[0]
             offset += 2
@@ -645,7 +624,6 @@ class ScheduledTasksFileParser(BaseParser):
             if task.run_level:
                 record_data["run_level"] = task.run_level
 
-            # Actions
             actions = []
             for action in task.actions:
                 action_data: dict[str, Any] = {"type": action.action_type}
@@ -662,7 +640,6 @@ class ScheduledTasksFileParser(BaseParser):
             if actions:
                 record_data["actions"] = actions
 
-            # Triggers
             triggers = []
             for trigger in task.triggers:
                 trigger_data: dict[str, Any] = {

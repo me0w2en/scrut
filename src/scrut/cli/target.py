@@ -43,7 +43,6 @@ def add(
     try:
         manager = TargetManager(case_path=case_path)
 
-        # Convert type string to enum if provided
         type_enum = TargetType(target_type) if target_type else None
 
         target_obj = manager.add(
