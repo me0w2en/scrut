@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scrut.dev/schemas/v1/record.schema.json",
+  "title": "Record",
+  "description": "Parsed record from an artifact",
+  "type": "object",
+  "required": ["record_id", "schema_version", "record_type", "data", "evidence_ref"],
+  "properties": {
+    "record_id": {
+      "type": "string",
+      "description": "Unique identifier (artifact-scoped)"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^v[0-9]+$",
+      "description": "Schema version (e.g., v1)"
+    },
+    "record_type": {
+      "type": "string",
+      "enum": ["timeline", "entity", "ioc", "raw"],
+      "description": "Type discriminator"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Event timestamp (ISO-8601, normalized)"
+    },
+    "timestamp_original": {
+      "type": "string",
+      "description": "Original timestamp before normalization"
+    },
+    "data": {
+      "type": "object",
+      "description": "Record payload (type-specific)"
+    },
+    "evidence_ref": {
+      "$ref": "#/$defs/EvidenceRef"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "EvidenceRef": {
+      "type": "object",
+      "required": ["target_id", "artifact_path", "parser_name", "parser_version", "source_hash"],
+      "properties": {
+        "target_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Source target"
+        },
+        "artifact_path": {
+          "type": "string",
+          "description": "Path to source artifact"
+        },
+        "record_offset": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Byte offset within artifact"
+        },
+        "record_index": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Record index within artifact"
+        },
+        "parser_name": {
+          "type": "string",
+          "description": "Parser that produced this record"
+        },
+        "parser_version": {
+          "type": "string",
+          "description": "Parser version"
+        },
+        "source_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA-256 of source artifact"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

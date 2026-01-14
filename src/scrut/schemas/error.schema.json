@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scrut.dev/schemas/v1/error.schema.json",
+  "title": "StructuredError",
+  "description": "Structured error response format",
+  "type": "object",
+  "required": ["code", "message", "remediation", "retryable"],
+  "properties": {
+    "code": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*$",
+      "description": "Error code (e.g., TARGET_NOT_FOUND)",
+      "examples": [
+        "TARGET_NOT_FOUND",
+        "PARSE_ERROR",
+        "INVALID_FORMAT",
+        "PERMISSION_DENIED",
+        "UNSUPPORTED_ARTIFACT",
+        "HASH_MISMATCH",
+        "TIMEOUT",
+        "RESOURCE_EXHAUSTED"
+      ]
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable error message"
+    },
+    "remediation": {
+      "type": "string",
+      "description": "Suggested fix or next step"
+    },
+    "retryable": {
+      "type": "boolean",
+      "description": "Whether retry may succeed"
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Additional context (target_id, path, etc.)"
+    }
+  },
+  "additionalProperties": false
+}

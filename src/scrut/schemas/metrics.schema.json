@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scrut.dev/schemas/v1/metrics.schema.json",
+  "title": "StepMetrics",
+  "description": "Observability metrics for a command or step",
+  "type": "object",
+  "required": [
+    "run_id",
+    "step_name",
+    "duration_ms",
+    "records_processed",
+    "records_output",
+    "bytes_read",
+    "bytes_written",
+    "warnings",
+    "errors",
+    "skipped"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Correlation ID"
+    },
+    "step_name": {
+      "type": "string",
+      "description": "Step identifier"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Execution time in milliseconds"
+    },
+    "records_processed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of records processed"
+    },
+    "records_output": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of records emitted"
+    },
+    "bytes_read": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Bytes read from input"
+    },
+    "bytes_written": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Bytes written to output"
+    },
+    "warnings": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Warning count"
+    },
+    "errors": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Error count"
+    },
+    "skipped": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Skipped record count"
+    }
+  },
+  "additionalProperties": false
+}
