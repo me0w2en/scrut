@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scrut.dev/schemas/v1/case.schema.json",
+  "title": "Case",
+  "description": "Investigation container that groups related targets",
+  "type": "object",
+  "required": ["case_id", "name", "timezone", "created_at", "updated_at", "status"],
+  "properties": {
+    "case_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique identifier (UUID v4)"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$",
+      "description": "Human-readable case name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Case notes and context"
+    },
+    "analyst": {
+      "type": "string",
+      "description": "Primary analyst identifier"
+    },
+    "timezone": {
+      "type": "string",
+      "default": "UTC",
+      "description": "Case timezone (IANA format)"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 creation timestamp"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 last update timestamp"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "active", "archived"],
+      "description": "Case lifecycle status"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Classification tags"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Custom key-value pairs"
+    }
+  },
+  "additionalProperties": false
+}
