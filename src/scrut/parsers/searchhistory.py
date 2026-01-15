@@ -104,7 +104,7 @@ class SearchHistoryParser:
         strings = self._extract_unicode_strings(chunk)
 
         for s in strings:
-                if (
+            if (
                 len(s) >= 3
                 and (s.startswith("C:") or s.startswith("\\\\") or "://" in s)
             ):
