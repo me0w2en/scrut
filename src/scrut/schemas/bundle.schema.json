@@ -1,0 +1,227 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scrut.dev/schemas/v1/bundle.schema.json",
+  "title": "BundleManifest",
+  "description": "Manifest containing all provenance metadata for a reproducible evidence bundle",
+  "type": "object",
+  "required": ["manifest_version", "bundle_id", "case_id", "case_name", "created_at", "created_by", "environment"],
+  "properties": {
+    "manifest_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Manifest schema version (semver)"
+    },
+    "bundle_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique bundle identifier (UUID v4)"
+    },
+    "case_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Associated case identifier"
+    },
+    "case_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Case name for display"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 bundle creation timestamp"
+    },
+    "created_by": {
+      "type": "string",
+      "description": "Analyst who created the bundle"
+    },
+    "environment": {
+      "$ref": "#/$defs/EnvironmentInfo"
+    },
+    "targets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/TargetReference" },
+      "description": "Targets included in bundle"
+    },
+    "commands": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/CommandRecord" },
+      "description": "Commands executed to produce results"
+    },
+    "results": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ResultReference" },
+      "description": "Result files in bundle"
+    },
+    "bundle_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 hash of entire bundle directory"
+    },
+    "signature": {
+      "type": "string",
+      "description": "Digital signature of manifest"
+    },
+    "signed_by": {
+      "type": "string",
+      "description": "Identity of signer"
+    },
+    "signed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of signature"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "EnvironmentInfo": {
+      "type": "object",
+      "required": ["python_version", "scrut_version", "platform", "hostname", "username", "cwd"],
+      "properties": {
+        "python_version": {
+          "type": "string",
+          "description": "Python version"
+        },
+        "scrut_version": {
+          "type": "string",
+          "description": "Scrut version"
+        },
+        "platform": {
+          "type": "string",
+          "description": "Operating system platform"
+        },
+        "hostname": {
+          "type": "string",
+          "description": "Machine hostname"
+        },
+        "username": {
+          "type": "string",
+          "description": "Current username"
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory"
+        },
+        "env_vars": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Relevant environment variables"
+        }
+      },
+      "additionalProperties": false
+    },
+    "TargetReference": {
+      "type": "object",
+      "required": ["target_id", "name", "type", "path", "hash", "size_bytes"],
+      "properties": {
+        "target_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Target UUID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Target name"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["image", "folder", "collection", "output"],
+          "description": "Target type"
+        },
+        "path": {
+          "type": "string",
+          "description": "Original path"
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA-256 hash of target"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Target size in bytes"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CommandRecord": {
+      "type": "object",
+      "required": ["command", "exit_code", "started_at", "completed_at", "duration_ms"],
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Full command string executed"
+        },
+        "args": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Parsed command arguments"
+        },
+        "exit_code": {
+          "type": "integer",
+          "description": "Command exit code"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Command start timestamp"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Command completion timestamp"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Execution duration in milliseconds"
+        },
+        "output_file": {
+          "type": "string",
+          "description": "Output file path"
+        },
+        "output_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA-256 hash of output file"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ResultReference": {
+      "type": "object",
+      "required": ["filename", "artifact_type", "source_artifact", "record_count", "hash", "size_bytes"],
+      "properties": {
+        "filename": {
+          "type": "string",
+          "description": "Result filename in bundle"
+        },
+        "artifact_type": {
+          "type": "string",
+          "description": "Artifact type (evtx, prefetch, etc.)"
+        },
+        "source_artifact": {
+          "type": "string",
+          "description": "Source artifact path"
+        },
+        "record_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of records in result"
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "SHA-256 hash of result file"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Result file size in bytes"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
