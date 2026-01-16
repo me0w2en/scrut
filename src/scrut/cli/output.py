@@ -352,3 +352,29 @@ class OutputFormatter:
     def is_human(self) -> bool:
         """Check if output format is human-readable."""
         return self.format == "human"
+
+    def pagination(
+        self,
+        has_more: bool,
+        cursor: str | None = None,
+        total_estimated: int | None = None,
+        records_returned: int = 0,
+    ) -> None:
+        """Output pagination metadata.
+
+        Args:
+            has_more: Whether more results are available
+            cursor: Cursor for next page
+            total_estimated: Estimated total record count
+            records_returned: Number of records returned
+        """
+        if self.format == "human":
+            import sys
+            sys.stderr.write(f"\nRecords returned: {records_returned}")
+            if total_estimated:
+                sys.stderr.write(f" of ~{total_estimated}")
+            if has_more and cursor:
+                sys.stderr.write(f"\nMore results available. Use --cursor {cursor}")
+            sys.stderr.write("\n")
+        else:
+            output_pagination(has_more, cursor, total_estimated)

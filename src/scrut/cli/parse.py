@@ -145,7 +145,10 @@ def _get_artifact_data(
     help="Partition index (0-based). Auto-detected if not specified."
 )
 @click.option("--limit", "-l", type=int, default=None, help="Limit number of records")
-@click.option("--since", type=str, default=None, help="Filter records since timestamp (ISO-8601)")
+@click.option("--since", type=str, default=None, help="Filter records since timestamp (ISO-8601 or relative: 7d, 24h)")
+@click.option("--until", type=str, default=None, help="Filter records until timestamp (ISO-8601 or relative)")
+@click.option("--cursor", type=str, default=None, help="Pagination cursor from previous request")
+@click.option("--summary", is_flag=True, help="Output count only, no records")
 @click.pass_context
 def evtx(
     ctx: click.Context,
@@ -155,6 +158,9 @@ def evtx(
     partition_index: int | None,
     limit: int | None,
     since: str | None,
+    until: str | None,
+    cursor: str | None,
+    summary: bool,
 ) -> None:
     """Parse Windows Event Log (EVTX) file to JSONL.
 
@@ -217,24 +223,48 @@ def evtx(
             timezone_str=ctx.obj.get("timezone", "UTC"),
         )
 
+        from scrut.core.pagination import Paginator, parse_time_filter, CursorGenerator
+
+        paginator = Paginator(limit=limit, cursor=cursor)
+        since_dt = parse_time_filter(since)
+        until_dt = parse_time_filter(until)
+
         start_time = time.time()
         records_processed = 0
         records_output = 0
+        last_timestamp = None
+        last_record_id = None
 
         for record in parser.parse_bytes(data):
             records_processed += 1
 
-            if since and record.timestamp:
-                from datetime import datetime
-                since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
-                if record.timestamp < since_dt:
-                    continue
+            if paginator.should_skip(records_processed - 1):
+                continue
 
-            formatter.output(record.model_dump(mode="json", exclude_none=True))
+            if since_dt and record.timestamp and record.timestamp < since_dt:
+                continue
+
+            if until_dt and record.timestamp and record.timestamp > until_dt:
+                continue
+
+            if not summary:
+                formatter.output(record.model_dump(mode="json", exclude_none=True))
+
             records_output += 1
+            last_timestamp = record.timestamp
+            last_record_id = record.record_id
 
-            if limit and records_output >= limit:
+            if paginator.should_stop():
                 break
+
+        has_more = limit is not None and records_output >= limit
+        next_cursor = None
+        if has_more:
+            next_cursor = CursorGenerator.create_next_cursor(
+                current_offset=paginator.offset + records_output,
+                last_timestamp=last_timestamp,
+                last_record_id=last_record_id,
+            )
 
         duration_ms = int((time.time() - start_time) * 1000)
 
@@ -251,7 +281,21 @@ def evtx(
             skipped=records_processed - records_output,
         )
 
-        formatter.flush_table(title=f"EVTX Records ({records_output} total)")
+        if summary:
+            formatter.output({
+                "artifact_type": "evtx",
+                "records_count": records_output,
+                "records_processed": records_processed,
+                "duration_ms": duration_ms,
+            })
+        else:
+            formatter.flush_table(title=f"EVTX Records ({records_output} total)")
+
+        formatter.pagination(
+            has_more=has_more,
+            cursor=next_cursor,
+            records_returned=records_output,
+        )
 
         click.echo(f"Parsed {records_output} records in {duration_ms}ms", err=True)
 
