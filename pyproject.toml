@@ -39,6 +39,18 @@ dev = [
     "pytest-cov>=4.1.0",
     "ruff>=0.3.0",
 ]
+signing = [
+    "cryptography>=42.0.0",
+]
+dissect = [
+    "dissect>=3.0",
+]
+all = [
+    "scrut[signing,dissect]",
+]
+dist = [
+    "pyinstaller>=6.0.0",
+]
 
 [project.scripts]
 scrut = "scrut.cli.main:cli"
@@ -85,4 +97,21 @@ exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
+]
+
+# PyInstaller configuration for distribution
+[tool.pyinstaller]
+name = "scrut"
+onefile = true
+console = true
+icon = "assets/scrut.ico"
+add-data = [
+    "playbooks:playbooks",
+    "src/scrut/schemas:schemas",
+]
+hidden-import = [
+    "scrut.parsers",
+    "scrut.collectors",
+    "scrut.normalizer",
+    "scrut.plugins",
 ]
