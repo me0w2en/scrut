@@ -11,6 +11,7 @@ from scrut.cli.bundle import bundle
 from scrut.cli.case import case
 from scrut.cli.output import OutputFormat, OutputFormatter, set_output_format
 from scrut.cli.parse import parse
+from scrut.cli.playbook import playbook
 from scrut.cli.target import target
 from scrut.core.logging import configure_logging, set_verbose
 
@@ -111,6 +112,7 @@ cli.add_command(case)
 cli.add_command(target)
 cli.add_command(parse)
 cli.add_command(bundle)
+cli.add_command(playbook)
 
 EXIT_SUCCESS = 0
 EXIT_ERROR = 1

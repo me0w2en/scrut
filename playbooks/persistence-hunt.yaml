@@ -1,0 +1,84 @@
+playbook_id: persistence-hunt
+name: Persistence Mechanism Hunt
+description: Comprehensive hunt for persistence mechanisms including Run keys, scheduled tasks, services, WMI subscriptions, and startup items.
+version: "1.0.0"
+author: Scrut Team
+tags:
+  - persistence
+  - hunt
+  - comprehensive
+
+estimated_duration_seconds: 180
+
+steps:
+  - step_id: parse-scheduled-tasks
+    name: Parse Scheduled Tasks
+    command: parse scheduledtasks
+    description: Extract all scheduled task definitions
+    on_error: continue
+
+  - step_id: parse-services
+    name: Parse Windows Services
+    command: parse services
+    description: Extract service configurations with risk indicators
+    on_error: continue
+
+  - step_id: parse-wmi-persistence
+    name: Parse WMI Persistence
+    command: parse wmi
+    description: Detect WMI EventFilter/Consumer/Binding persistence
+    on_error: continue
+
+  - step_id: parse-registry-run
+    name: Parse Registry Run Keys
+    command: parse registry
+    params:
+      artifact: "Windows/System32/config/SOFTWARE"
+    description: Extract Run, RunOnce, and startup registry keys
+    on_error: continue
+
+  - step_id: parse-ntuser-run
+    name: Parse User Run Keys
+    command: parse registry
+    params:
+      artifact: "Users/*/NTUSER.DAT"
+    description: Extract user-specific Run keys and startup items
+    on_error: continue
+
+  - step_id: parse-shellbags
+    name: Parse ShellBags
+    command: parse shellbags
+    description: Extract folder navigation history
+    on_error: continue
+
+  - step_id: parse-lnk
+    name: Parse Shortcuts (LNK)
+    command: parse lnk
+    description: Extract shortcut files for startup folder items
+    on_error: continue
+
+  - step_id: parse-amcache
+    name: Parse Amcache
+    command: parse amcache
+    description: Extract installed application evidence
+    on_error: continue
+
+  - step_id: parse-bam
+    name: Parse BAM/DAM
+    command: parse bam
+    description: Extract Background Activity Moderator data (Win10+)
+    on_error: continue
+
+  - step_id: parse-muicache
+    name: Parse MUICache
+    command: parse muicache
+    description: Extract program execution from MUI cache
+    on_error: continue
+
+  - step_id: parse-userassist
+    name: Parse UserAssist
+    command: parse registry
+    params:
+      artifact: "Users/*/NTUSER.DAT"
+    description: Extract UserAssist execution counts
+    on_error: continue
