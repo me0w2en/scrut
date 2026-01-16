@@ -1,0 +1,79 @@
+playbook_id: lateral-movement
+name: Lateral Movement Detection
+description: Hunt for indicators of lateral movement including RDP, PsExec, WMI, and network authentication events.
+version: "1.0.0"
+author: Scrut Team
+tags:
+  - lateral-movement
+  - network
+  - authentication
+
+estimated_duration_seconds: 240
+
+steps:
+  - step_id: parse-rdp-cache
+    name: Parse RDP Cache
+    command: parse rdpcache
+    description: Extract RDP bitmap cache and connection files
+    on_error: continue
+
+  - step_id: parse-evtx-security
+    name: Parse Security Events (Logon)
+    command: parse evtx
+    params:
+      artifact: "Windows/System32/winevt/Logs/Security.evtx"
+      limit: 20000
+    description: Extract logon events (4624, 4625, 4648)
+    on_error: continue
+
+  - step_id: parse-evtx-rdp
+    name: Parse RDP Events
+    command: parse evtx
+    params:
+      artifact: "Windows/System32/winevt/Logs/Microsoft-Windows-TerminalServices-LocalSessionManager%4Operational.evtx"
+    description: Extract RDP session events
+    on_error: continue
+
+  - step_id: parse-evtx-winrm
+    name: Parse WinRM Events
+    command: parse evtx
+    params:
+      artifact: "Windows/System32/winevt/Logs/Microsoft-Windows-WinRM%4Operational.evtx"
+    description: Extract Windows Remote Management events
+    on_error: continue
+
+  - step_id: parse-shimcache
+    name: Parse ShimCache
+    command: parse shimcache
+    description: Look for PsExec, WMIC, and other remote tools
+    on_error: continue
+
+  - step_id: parse-prefetch
+    name: Parse Prefetch
+    command: parse prefetch
+    description: Look for execution of remote administration tools
+    on_error: continue
+
+  - step_id: parse-network-config
+    name: Parse Network Configuration
+    command: parse networkconfig
+    description: Extract network interface and profile history
+    on_error: continue
+
+  - step_id: parse-firewall
+    name: Parse Firewall Rules
+    command: parse firewall
+    description: Check for suspicious firewall rule modifications
+    on_error: continue
+
+  - step_id: parse-bits
+    name: Parse BITS Jobs
+    command: parse bits
+    description: Detect BITS-based file transfers
+    on_error: continue
+
+  - step_id: parse-browser
+    name: Parse Browser History
+    command: parse browser
+    description: Check for web-based access patterns
+    on_error: continue

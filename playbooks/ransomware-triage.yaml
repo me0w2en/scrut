@@ -1,0 +1,97 @@
+playbook_id: ransomware-triage
+name: Ransomware Triage
+description: Quick triage playbook for ransomware incident response. Collects execution evidence, persistence mechanisms, and recent file activity.
+version: "1.0.0"
+author: Scrut Team
+tags:
+  - ransomware
+  - triage
+  - quick
+
+variables:
+  since_days: "7"
+
+estimated_duration_seconds: 300
+
+steps:
+  - step_id: parse-prefetch
+    name: Parse Prefetch (Execution Evidence)
+    command: parse prefetch
+    description: Extract program execution history from Prefetch files
+    on_error: continue
+
+  - step_id: parse-shimcache
+    name: Parse ShimCache (AppCompatCache)
+    command: parse shimcache
+    description: Extract application compatibility cache for execution timeline
+    on_error: continue
+
+  - step_id: parse-amcache
+    name: Parse Amcache
+    command: parse amcache
+    description: Extract application execution history with SHA1 hashes
+    on_error: continue
+
+  - step_id: parse-evtx-security
+    name: Parse Security Event Log
+    command: parse evtx
+    params:
+      artifact: "Windows/System32/winevt/Logs/Security.evtx"
+      limit: 10000
+    description: Extract security events (logon, privilege use, etc.)
+    on_error: continue
+
+  - step_id: parse-evtx-powershell
+    name: Parse PowerShell Event Log
+    command: parse evtx
+    params:
+      artifact: "Windows/System32/winevt/Logs/Microsoft-Windows-PowerShell%4Operational.evtx"
+      limit: 5000
+    description: Extract PowerShell execution events
+    on_error: continue
+
+  - step_id: parse-powershell-history
+    name: Parse PowerShell Console History
+    command: parse powershell
+    description: Extract PSReadLine command history with risk analysis
+    on_error: continue
+
+  - step_id: parse-scheduled-tasks
+    name: Parse Scheduled Tasks
+    command: parse scheduledtasks
+    description: Extract scheduled task definitions for persistence
+    on_error: continue
+
+  - step_id: parse-services
+    name: Parse Windows Services
+    command: parse services
+    description: Extract service configurations with risk analysis
+    on_error: continue
+
+  - step_id: parse-wmi-persistence
+    name: Parse WMI Persistence
+    command: parse wmi
+    description: Detect WMI-based persistence mechanisms
+    on_error: continue
+
+  - step_id: parse-usnjrnl
+    name: Parse USN Journal
+    command: parse usnjrnl
+    params:
+      limit: 50000
+    description: Extract recent file system changes
+    on_error: continue
+
+  - step_id: parse-mft
+    name: Parse MFT
+    command: parse mft
+    params:
+      limit: 10000
+    description: Extract file metadata and detect timestomping
+    on_error: continue
+
+  - step_id: parse-defender
+    name: Parse Windows Defender Logs
+    command: parse defender
+    description: Extract threat detections and quarantine events
+    on_error: continue
