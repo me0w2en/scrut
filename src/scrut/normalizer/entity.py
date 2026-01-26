@@ -11,7 +11,6 @@ from typing import Any, Literal
 
 from scrut.models.record import EvidenceRef, ParsedRecord
 
-
 EntityType = Literal["user", "host", "file", "process", "network", "domain", "service"]
 
 

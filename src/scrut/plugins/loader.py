@@ -8,7 +8,6 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from scrut.plugins.interface import (
     ParserPlugin,
@@ -20,7 +19,6 @@ from scrut.plugins.manifest import (
     PluginManifest,
     PluginRegistry,
 )
-
 
 DEFAULT_PLUGIN_DIRS = [
     Path.home() / ".scrut" / "plugins",
@@ -235,7 +233,7 @@ class PluginLoader:
         except PluginLoadError:
             raise
         except Exception as e:
-            raise PluginLoadError(manifest.name, f"Failed to load: {e}")
+            raise PluginLoadError(manifest.name, f"Failed to load: {e}") from e
 
     def load_all(self) -> dict[str, ParserPlugin]:
         """Load all enabled plugins.

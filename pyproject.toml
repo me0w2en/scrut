@@ -77,7 +77,17 @@ select = [
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
+    "B019",   # lru_cache on methods - acceptable for our use case (chunk caching)
+    "B027",   # empty method in abstract class - intentional for optional hooks
+    "SIM102", # nested if statements - often clearer for complex conditions
+    "SIM115", # context manager for files - classes manage their own lifecycle
+    "SIM113", # enumerate for index - parsers need explicit index control
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"src/scrut/cli/*.py" = ["ARG001"]  # CLI functions may have unused options for future use
+"src/scrut/plugins/*.py" = ["ARG001", "ARG002"]  # Plugin interfaces have optional parameters
+"src/scrut/parsers/*.py" = ["ARG002"]  # Parser methods may have unused parameters for interface consistency
 
 [tool.ruff.lint.isort]
 known-first-party = ["scrut"]

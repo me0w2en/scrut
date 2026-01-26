@@ -156,9 +156,8 @@ class EWFReader(ImageReader):
             if section_type == "sectors":
                 current_sectors_start = section.offset + 76
 
-            elif section_type == "table":
-                if current_sectors_start is not None:
-                    self._parse_table_section(fh, section, seg_idx, current_sectors_start)
+            elif section_type == "table" and current_sectors_start is not None:
+                self._parse_table_section(fh, section, seg_idx, current_sectors_start)
 
     def _read_section_header(self, fh: BinaryIO, offset: int) -> EWFSection | None:
         """Read an EWF section header.
@@ -340,13 +339,12 @@ class EWFReader(ImageReader):
         fh.seek(chunk_info.offset)
         raw_data = fh.read(chunk_info.size)
 
-        if chunk_info.is_compressed:
-            if len(raw_data) >= 2 and raw_data[0] == 0x78:
-                try:
-                    decompressed = zlib.decompress(raw_data)
-                    return decompressed
-                except zlib.error:
-                    pass
+        if chunk_info.is_compressed and len(raw_data) >= 2 and raw_data[0] == 0x78:
+            try:
+                decompressed = zlib.decompress(raw_data)
+                return decompressed
+            except zlib.error:
+                pass
 
         if len(raw_data) >= self._chunk_size:
             return raw_data[:self._chunk_size]
@@ -395,17 +393,16 @@ class EWFReader(ImageReader):
                     "bootable": status == 0x80,
                 })
 
-        if not partitions:
-            if len(mbr) >= 11 and mbr[3:11] == b"NTFS    ":
-                total_sectors = self._media_size // self.SECTOR_SIZE
-                partitions.append({
-                    "index": 0,
-                    "type": "ntfs",
-                    "type_id": 0x07,
-                    "start_sector": 0,
-                    "size_sectors": total_sectors,
-                    "bootable": False,
-                })
+        if not partitions and len(mbr) >= 11 and mbr[3:11] == b"NTFS    ":
+            total_sectors = self._media_size // self.SECTOR_SIZE
+            partitions.append({
+                "index": 0,
+                "type": "ntfs",
+                "type_id": 0x07,
+                "start_sector": 0,
+                "size_sectors": total_sectors,
+                "bootable": False,
+            })
 
         return partitions
 

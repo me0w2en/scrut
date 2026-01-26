@@ -63,7 +63,7 @@ class SearchHistoryParser:
         # and a MRUListEx value with the order
 
         # Find MRUListEx to get order
-        mru_idx = self.data.find(b"MRUListEx", wwq_idx)
+        self.data.find(b"MRUListEx", wwq_idx)
 
         # Look for Unicode strings in the region
         search_start = wwq_idx
@@ -95,7 +95,7 @@ class SearchHistoryParser:
         chunk = self.data[search_start:search_end]
 
         # Look for path patterns
-        path_pattern = re.compile(
+        re.compile(
             rb"url\d+",
             re.IGNORECASE,
         )

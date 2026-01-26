@@ -54,10 +54,7 @@ class PlaybookStateManager:
         Returns:
             PlaybookRun if found, None otherwise
         """
-        if isinstance(run_id, str):
-            run_id_str = run_id
-        else:
-            run_id_str = str(run_id)
+        run_id_str = run_id if isinstance(run_id, str) else str(run_id)
 
         state_file = self.state_dir / f"{run_id_str}.json"
         if not state_file.exists():
@@ -77,10 +74,7 @@ class PlaybookStateManager:
         Returns:
             True if deleted, False if not found
         """
-        if isinstance(run_id, str):
-            run_id_str = run_id
-        else:
-            run_id_str = str(run_id)
+        run_id_str = run_id if isinstance(run_id, str) else str(run_id)
 
         state_file = self.state_dir / f"{run_id_str}.json"
         if state_file.exists():
@@ -119,9 +113,8 @@ class PlaybookStateManager:
                     if run.status != status:
                         continue
 
-                if playbook_id is not None:
-                    if run.playbook_id != playbook_id:
-                        continue
+                if playbook_id is not None and run.playbook_id != playbook_id:
+                    continue
 
                 runs.append(run)
             except (json.JSONDecodeError, KeyError, ValueError):

@@ -10,11 +10,12 @@ Collects common Windows forensic artifacts:
 
 import hashlib
 import shutil
-from dataclasses import dataclass, field
+from collections.abc import Iterator
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Iterator, Literal
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -372,10 +373,7 @@ class WindowsCollector:
         if not self._scope.includes_category(artifact.category):
             return False
 
-        if not self._scope.includes_artifact(artifact.artifact_type.value):
-            return False
-
-        return True
+        return self._scope.includes_artifact(artifact.artifact_type.value)
 
     def _collect_artifact(self, artifact: WindowsArtifact) -> None:
         """Collect a single artifact."""
@@ -432,7 +430,7 @@ class WindowsCollector:
                 )
                 return
 
-            rel_path = source_path.relative_to(self._system_root)
+            source_path.relative_to(self._system_root)
             dest_dir = self._output_dir / artifact.artifact_type.value
             dest_dir.mkdir(parents=True, exist_ok=True)
             dest_path = dest_dir / source_path.name
@@ -473,5 +471,4 @@ class WindowsCollector:
 
     def iter_artifacts(self) -> Iterator[WindowsArtifact]:
         """Iterate over artifacts to collect."""
-        for artifact in self.get_artifacts():
-            yield artifact
+        yield from self.get_artifacts()

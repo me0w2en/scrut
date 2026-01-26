@@ -16,7 +16,6 @@ from typing import Any, Literal
 
 from scrut.models.record import EvidenceRef, ParsedRecord
 
-
 IOCType = Literal["ip", "domain", "url", "hash", "email"]
 
 
@@ -112,9 +111,7 @@ class IOC:
     @staticmethod
     def defang(value: str, ioc_type: IOCType) -> str:
         """Defang an IOC value for safe sharing."""
-        if ioc_type == "ip":
-            return value.replace(".", "[.]")
-        elif ioc_type == "domain":
+        if ioc_type == "ip" or ioc_type == "domain":
             return value.replace(".", "[.]")
         elif ioc_type == "url":
             return value.replace("http://", "hxxp://").replace("https://", "hxxps://").replace(".", "[.]")
@@ -287,9 +284,7 @@ class IOCExtractor:
             return False
         if PATTERNS["ipv4"].match(domain):
             return False
-        if len(domain) < 4:
-            return False
-        return True
+        return not len(domain) < 4
 
     def _extract_ips(
         self, text: str, record: ParsedRecord, source: str

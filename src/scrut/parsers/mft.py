@@ -4,6 +4,7 @@ Parses the NTFS Master File Table to extract file metadata,
 timestamps, and file system structure information.
 """
 
+import contextlib
 import struct
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -297,10 +298,8 @@ class MFTParser:
             name_start = name_offset
             name_end = name_start + name_length * 2
             if name_end <= len(attr_data):
-                try:
+                with contextlib.suppress(UnicodeDecodeError):
                     name = attr_data[name_start:name_end].decode("utf-16-le")
-                except UnicodeDecodeError:
-                    pass
 
         if non_resident:
             if len(attr_data) < 64:

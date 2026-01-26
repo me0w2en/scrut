@@ -9,6 +9,7 @@ Locations:
 - %ProgramData%\\Microsoft\\Windows Defender\\Scans\\History\
 """
 
+import contextlib
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -291,10 +292,8 @@ class DetectionHistoryParser:
         # ASCII strings
         ascii_pattern = re.compile(rb"[\x20-\x7e]{%d,}" % min_length)
         for match in ascii_pattern.finditer(self.data):
-            try:
+            with contextlib.suppress(UnicodeDecodeError):
                 strings.append(match.group().decode("ascii"))
-            except UnicodeDecodeError:
-                pass
 
         # Unicode strings (UTF-16LE)
         i = 0

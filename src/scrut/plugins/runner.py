@@ -4,12 +4,11 @@ Runs plugins in separate processes for security and stability.
 Supports resource limits and timeout enforcement.
 """
 
+import contextlib
 import json
 import multiprocessing
 import os
 import resource
-import signal
-import sys
 import tempfile
 import traceback
 from datetime import datetime
@@ -17,7 +16,6 @@ from pathlib import Path
 from typing import Any
 
 from scrut.plugins.interface import (
-    ParserPlugin,
     PluginContext,
     PluginExecutionError,
     PluginRecord,
@@ -239,10 +237,8 @@ class PluginRunner:
             )
 
         finally:
-            try:
+            with contextlib.suppress(OSError):
                 os.unlink(output_file)
-            except OSError:
-                pass
 
     def _run_direct(
         self,

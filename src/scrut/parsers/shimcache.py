@@ -78,7 +78,7 @@ class ShimCacheParser:
             self._parse_win2003()
         elif magic == WIN7_MAGIC:
             self._parse_win7()
-        elif magic == WIN8_MAGIC or magic == WIN10_MAGIC:
+        elif magic in (WIN8_MAGIC, WIN10_MAGIC):
             self._parse_win8_10()
         else:
             # Try Win10 format as fallback
@@ -141,7 +141,7 @@ class ShimCacheParser:
                 break
 
             path_length = struct.unpack("<H", self.data[offset:offset + 2])[0]
-            max_path = struct.unpack("<H", self.data[offset + 2:offset + 4])[0]
+            struct.unpack("<H", self.data[offset + 2:offset + 4])[0]
 
             path_offset = struct.unpack("<I", self.data[offset + 4:offset + 8])[0]
 
@@ -192,7 +192,7 @@ class ShimCacheParser:
             )
 
             # Data size and offset
-            data_size = struct.unpack("<I", self.data[offset + 16:offset + 20])[0]
+            struct.unpack("<I", self.data[offset + 16:offset + 20])[0]
 
             if path_offset + path_length <= len(self.data):
                 try:
@@ -283,9 +283,8 @@ class ShimCacheParser:
                         )
 
                     # Data size follows
-                    data_size = 0
                     if lm_offset + 12 <= len(entry_data):
-                        data_size = struct.unpack(
+                        struct.unpack(
                             "<I", entry_data[lm_offset + 8:lm_offset + 12]
                         )[0]
 

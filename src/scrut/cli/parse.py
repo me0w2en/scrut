@@ -38,14 +38,14 @@ def _get_artifact_data(
         Tuple of (data, source_hash, target_uuid, size_bytes)
     """
     case_path = Path(ctx.obj.get("case_path", "."))
-    formatter: OutputFormatter = ctx.obj["formatter"]
+    ctx.obj["formatter"]
 
     if target_id and artifact_path:
         try:
             target_manager = TargetManager(case_path=case_path)
             target = target_manager.info(target_id)
         except ScrutError:
-            raise click.ClickException(f"Target not found: {target_id}")
+            raise click.ClickException(f"Target not found: {target_id}") from None
 
         if target.type != TargetType.IMAGE:
             raise click.ClickException(
@@ -64,7 +64,7 @@ def _get_artifact_data(
         try:
             image = open_image(image_path)
         except Exception as e:
-            raise click.ClickException(f"Failed to open image: {e}")
+            raise click.ClickException(f"Failed to open image: {e}") from e
 
         try:
             partitions = image.get_partitions()
@@ -223,7 +223,7 @@ def evtx(
             timezone_str=ctx.obj.get("timezone", "UTC"),
         )
 
-        from scrut.core.pagination import Paginator, parse_time_filter, CursorGenerator
+        from scrut.core.pagination import CursorGenerator, Paginator, parse_time_filter
 
         paginator = Paginator(limit=limit, cursor=cursor)
         since_dt = parse_time_filter(since)
@@ -268,7 +268,7 @@ def evtx(
 
         duration_ms = int((time.time() - start_time) * 1000)
 
-        metrics = StepMetrics(
+        StepMetrics(
             run_id=tid,
             step_name="parse_evtx",
             duration_ms=duration_ms,
@@ -423,7 +423,7 @@ def prefetch(
 
         duration_ms = int((time.time() - start_time) * 1000)
 
-        metrics = StepMetrics(
+        StepMetrics(
             run_id=tid,
             step_name="parse_prefetch",
             duration_ms=duration_ms,
@@ -556,7 +556,7 @@ def registry(
 
         duration_ms = int((time.time() - start_time) * 1000)
 
-        metrics = StepMetrics(
+        StepMetrics(
             run_id=tid,
             step_name="parse_registry",
             duration_ms=duration_ms,

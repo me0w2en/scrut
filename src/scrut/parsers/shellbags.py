@@ -4,6 +4,7 @@ Parses ShellBags from USRCLASS.DAT and NTUSER.DAT registry hives
 to extract evidence of folder access and browsing history.
 """
 
+import contextlib
 import struct
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -212,7 +213,7 @@ class ShellItemParser:
 
         item_type = data[2]
         is_directory = bool(item_type & 0x01)
-        is_unicode = bool(item_type & 0x04)
+        bool(item_type & 0x04)
 
         # File size at offset 4 (4 bytes, but usually ignored in ShellBags)
 
@@ -337,10 +338,8 @@ class ShellItemParser:
             name_data = data[5:]
             null_pos = name_data.find(b"\x00")
             if null_pos > 0:
-                try:
+                with contextlib.suppress(Exception):
                     name = name_data[:null_pos].decode("ascii", errors="replace")
-                except Exception:
-                    pass
 
         if not name:
             name = "Network Location"

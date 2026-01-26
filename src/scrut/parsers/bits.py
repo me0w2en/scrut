@@ -126,7 +126,6 @@ class BITSQueueParser:
         # Legacy format has a header followed by job records
         # Structure varies by Windows version
 
-        offset = 0
 
         # Try to find job records by looking for patterns
         # BITS jobs typically contain URLs and file paths

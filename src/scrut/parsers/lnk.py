@@ -4,6 +4,7 @@ Parses Windows shortcut files to extract target paths, timestamps,
 and other forensically relevant metadata.
 """
 
+import contextlib
 import struct
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -223,8 +224,8 @@ class LnkParser:
         if len(data) < 28:
             return
 
-        link_info_size = struct.unpack("<I", data[0:4])[0]
-        link_info_header_size = struct.unpack("<I", data[4:8])[0]
+        struct.unpack("<I", data[0:4])[0]
+        struct.unpack("<I", data[4:8])[0]
         link_info_flags = struct.unpack("<I", data[8:12])[0]
 
         volume_id_offset = struct.unpack("<I", data[12:16])[0]
@@ -244,12 +245,10 @@ class LnkParser:
                         label_data = vol_data[vol_label_offset:]
                         null_pos = label_data.find(b"\x00")
                         if null_pos > 0:
-                            try:
+                            with contextlib.suppress(Exception):
                                 self.result.volume_label = label_data[
                                     :null_pos
                                 ].decode("cp1252", errors="replace")
-                            except Exception:
-                                pass
 
             if local_base_path_offset > 0 and local_base_path_offset < len(data):
                 path_data = data[local_base_path_offset:]
@@ -268,7 +267,7 @@ class LnkParser:
                 net_offset = common_network_relative_link_offset
                 if net_offset + 20 <= len(data):
                     net_data = data[net_offset:]
-                    net_size = struct.unpack("<I", net_data[0:4])[0]
+                    struct.unpack("<I", net_data[0:4])[0]
                     net_name_offset = struct.unpack("<I", net_data[8:12])[0]
                     device_name_offset = struct.unpack("<I", net_data[12:16])[0]
 
@@ -276,34 +275,28 @@ class LnkParser:
                         name_data = net_data[net_name_offset:]
                         null_pos = name_data.find(b"\x00")
                         if null_pos > 0:
-                            try:
+                            with contextlib.suppress(Exception):
                                 self.result.network_share_name = name_data[
                                     :null_pos
                                 ].decode("cp1252", errors="replace")
-                            except Exception:
-                                pass
 
                     if device_name_offset > 0 and device_name_offset < len(net_data):
                         dev_data = net_data[device_name_offset:]
                         null_pos = dev_data.find(b"\x00")
                         if null_pos > 0:
-                            try:
+                            with contextlib.suppress(Exception):
                                 self.result.device_name = dev_data[:null_pos].decode(
                                     "cp1252", errors="replace"
                                 )
-                            except Exception:
-                                pass
 
         if common_path_suffix_offset > 0 and common_path_suffix_offset < len(data):
             suffix_data = data[common_path_suffix_offset:]
             null_pos = suffix_data.find(b"\x00")
             if null_pos > 0:
-                try:
+                with contextlib.suppress(Exception):
                     self.result.common_path_suffix = suffix_data[:null_pos].decode(
                         "cp1252", errors="replace"
                     )
-                except Exception:
-                    pass
 
         if self.result.network_share_name and self.result.common_path_suffix:
             self.result.target_path = (
@@ -330,12 +323,10 @@ class LnkParser:
                     null_pos = machine_id_data.find(b"\x00")
                     if null_pos > 0:
                         machine_id_data = machine_id_data[:null_pos]
-                    try:
+                    with contextlib.suppress(Exception):
                         self.result.machine_id = machine_id_data.decode(
                             "ascii", errors="replace"
                         ).rstrip("\x00")
-                    except Exception:
-                        pass
 
                 # Droid Volume ID at offset 32, 16 bytes (GUID)
                 if len(block_data) >= 48:

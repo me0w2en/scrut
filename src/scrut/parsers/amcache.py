@@ -4,6 +4,7 @@ Parses the Amcache.hve registry hive to extract information about
 executed programs, installed applications, and drivers.
 """
 
+import contextlib
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -338,11 +339,9 @@ class AmcacheFileParser(BaseParser):
                     pass
 
             if timestamp is None and entry.get("link_date"):
-                try:
-                    # Link date is often a hex timestamp
+                # Link date is often a hex timestamp
+                with contextlib.suppress(Exception):
                     timestamp = _parse_filetime_str(str(entry["link_date"]))
-                except Exception:
-                    pass
 
             evidence_ref = self.create_evidence_ref(
                 record_offset=0,

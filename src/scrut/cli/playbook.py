@@ -11,7 +11,6 @@ import click
 
 from scrut.cli.output import OutputFormatter
 from scrut.core.errors import ScrutError
-from scrut.core.target import TargetManager
 from scrut.models.playbook import PlaybookRunStatus
 from scrut.playbook.executor import PlaybookExecutor
 from scrut.playbook.loader import PlaybookLoader, PlaybookNotFoundError

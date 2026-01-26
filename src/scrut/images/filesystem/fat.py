@@ -106,10 +106,7 @@ class FATReader(FilesystemReader):
             data_sectors = total_sectors - (reserved_sectors + fat_count * sectors_per_fat + root_dir_sectors)
             cluster_count = data_sectors // sectors_per_cluster
 
-            if cluster_count < 4085:
-                fat_type = "FAT12"
-            else:
-                fat_type = "FAT16"
+            fat_type = "FAT12" if cluster_count < 4085 else "FAT16"
 
         self._boot_sector = FATBootSector(
             bytes_per_sector=bytes_per_sector,
@@ -359,7 +356,7 @@ class FATReader(FilesystemReader):
 
                 if entry.is_long_name:
                     lfn_data = entry_data
-                    seq = lfn_data[0] & 0x3F
+                    lfn_data[0] & 0x3F
                     chars = (
                         lfn_data[1:11].decode("utf-16-le", errors="ignore") +
                         lfn_data[14:26].decode("utf-16-le", errors="ignore") +

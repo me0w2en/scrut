@@ -7,7 +7,7 @@ LLM agents to process outputs without token overflow.
 import base64
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -78,7 +78,7 @@ class CursorGenerator:
             data = json.loads(json_str)
             return PaginationState.from_dict(data)
         except Exception as e:
-            raise ValueError(f"Invalid cursor: {e}")
+            raise ValueError(f"Invalid cursor: {e}") from e
 
     @staticmethod
     def create_next_cursor(
@@ -243,22 +243,25 @@ def parse_time_filter(value: str | None) -> datetime | None:
         value: Time filter string
 
     Returns:
-        Datetime or None if not specified
+        Datetime or None if not specified or invalid
     """
     if not value:
         return None
 
-    if value.endswith("d"):
-        days = int(value[:-1])
-        from datetime import timedelta, timezone
-        return datetime.now(timezone.utc) - timedelta(days=days)
-    elif value.endswith("h"):
-        hours = int(value[:-1])
-        from datetime import timedelta, timezone
-        return datetime.now(timezone.utc) - timedelta(hours=hours)
-    elif value.endswith("m"):
-        minutes = int(value[:-1])
-        from datetime import timedelta, timezone
-        return datetime.now(timezone.utc) - timedelta(minutes=minutes)
-    else:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    try:
+        if value.endswith("d"):
+            days = int(value[:-1])
+            from datetime import timedelta
+            return datetime.now(UTC) - timedelta(days=days)
+        elif value.endswith("h"):
+            hours = int(value[:-1])
+            from datetime import timedelta
+            return datetime.now(UTC) - timedelta(hours=hours)
+        elif value.endswith("m"):
+            minutes = int(value[:-1])
+            from datetime import timedelta
+            return datetime.now(UTC) - timedelta(minutes=minutes)
+        else:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (ValueError, OverflowError):
+        return None

@@ -258,10 +258,7 @@ class TimelineNormalizer:
         filename = data.get("filename", "unknown")
         reason = data.get("reason", [])
 
-        if isinstance(reason, list):
-            reason_str = ", ".join(reason)
-        else:
-            reason_str = str(reason)
+        reason_str = ", ".join(reason) if isinstance(reason, list) else str(reason)
 
         return TimelineEvent(
             timestamp=record.timestamp,

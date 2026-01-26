@@ -136,10 +136,7 @@ class PlaybookLoader:
             return Path(name)
 
         name_path = Path(name)
-        if name_path.suffix in (".yaml", ".yml"):
-            base_name = name_path.stem
-        else:
-            base_name = name
+        base_name = name_path.stem if name_path.suffix in (".yaml", ".yml") else name
 
         for search_path in self.paths:
             for ext in (".yaml", ".yml"):
@@ -170,7 +167,7 @@ class PlaybookLoader:
         try:
             data = yaml.safe_load(content)
         except yaml.YAMLError as e:
-            raise PlaybookValidationError(path, [f"YAML parse error: {e}"])
+            raise PlaybookValidationError(path, [f"YAML parse error: {e}"]) from e
 
         errors = self._validate_playbook_data(data, path)
         if errors:
@@ -217,7 +214,7 @@ class PlaybookLoader:
         return re.sub(pattern, replace_var, content)
 
     def _validate_playbook_data(
-        self, data: dict[str, Any], path: Path
+        self, data: dict[str, Any], path: Path  # noqa: ARG002
     ) -> list[str]:
         """Validate playbook data structure.
 

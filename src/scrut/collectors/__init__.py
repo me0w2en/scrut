@@ -9,7 +9,7 @@ Collectors support scoped collection to limit what artifacts are gathered.
 """
 
 from scrut.collectors.scope import CollectionScope, ScopeBuilder
-from scrut.collectors.windows import WindowsCollector, WindowsArtifact
+from scrut.collectors.windows import WindowsArtifact, WindowsCollector
 
 __all__ = [
     "CollectionScope",

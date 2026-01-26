@@ -182,7 +182,7 @@ class FilesystemReader(ABC):
         """
         import fnmatch
 
-        for dirpath, dirnames, filenames in self.walk(path):
+        for dirpath, _dirnames, filenames in self.walk(path):
             for filename in filenames:
                 if fnmatch.fnmatch(filename.lower(), pattern.lower()):
                     if dirpath:

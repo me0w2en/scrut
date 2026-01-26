@@ -4,6 +4,7 @@ Custom implementation that parses Windows Prefetch files without external depend
 Supports versions 17 (XP), 23 (Vista/7), 26 (8/8.1), and 30 (Win10+).
 """
 
+import contextlib
 import struct
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -337,7 +338,7 @@ class PrefetchFile:
                     raise ValueError(
                         f"MAM decompression failed: {e}. "
                         "Use external tools to decompress first."
-                    )
+                    ) from e
 
             if decompressed is None:
                 raise ValueError(
@@ -436,8 +437,8 @@ class PrefetchFile:
         # 144-148: Run count
         # 148-152: Unknown
 
-        section_a_offset = struct.unpack("<I", self.data[84:88])[0]
-        section_a_entries = struct.unpack("<I", self.data[88:92])[0]
+        struct.unpack("<I", self.data[84:88])[0]
+        struct.unpack("<I", self.data[88:92])[0]
         section_c_offset = struct.unpack("<I", self.data[100:104])[0]
         section_c_length = struct.unpack("<I", self.data[104:108])[0]
         section_d_offset = struct.unpack("<I", self.data[108:112])[0]
@@ -458,8 +459,8 @@ class PrefetchFile:
             return
 
         # Similar to v17 but with different offsets
-        section_a_offset = struct.unpack("<I", self.data[84:88])[0]
-        section_a_entries = struct.unpack("<I", self.data[88:92])[0]
+        struct.unpack("<I", self.data[84:88])[0]
+        struct.unpack("<I", self.data[88:92])[0]
         section_c_offset = struct.unpack("<I", self.data[100:104])[0]
         section_c_length = struct.unpack("<I", self.data[104:108])[0]
         section_d_offset = struct.unpack("<I", self.data[108:112])[0]
@@ -480,8 +481,8 @@ class PrefetchFile:
         if len(self.data) < 304:
             return
 
-        section_a_offset = struct.unpack("<I", self.data[84:88])[0]
-        section_a_entries = struct.unpack("<I", self.data[88:92])[0]
+        struct.unpack("<I", self.data[84:88])[0]
+        struct.unpack("<I", self.data[88:92])[0]
         section_c_offset = struct.unpack("<I", self.data[100:104])[0]
         section_c_length = struct.unpack("<I", self.data[104:108])[0]
         section_d_offset = struct.unpack("<I", self.data[108:112])[0]
@@ -565,10 +566,8 @@ class PrefetchFile:
             # Read volume path
             vol_path = ""
             if vol_path_offset + vol_path_length * 2 <= len(self.data):
-                try:
+                with contextlib.suppress(UnicodeDecodeError):
                     vol_path = self.data[vol_path_offset:vol_path_offset + vol_path_length * 2].decode("utf-16-le").rstrip("\x00")
-                except UnicodeDecodeError:
-                    pass
 
             self.volume_info.append({
                 "path": vol_path,
@@ -605,10 +604,8 @@ class PrefetchFile:
             vol_path_abs = offset + vol_path_offset
             vol_path = ""
             if vol_path_abs + vol_path_length * 2 <= len(self.data):
-                try:
+                with contextlib.suppress(UnicodeDecodeError):
                     vol_path = self.data[vol_path_abs:vol_path_abs + vol_path_length * 2].decode("utf-16-le").rstrip("\x00")
-                except UnicodeDecodeError:
-                    pass
 
             if vol_path or vol_serial:
                 self.volume_info.append({

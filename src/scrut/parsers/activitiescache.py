@@ -10,6 +10,7 @@ Locations:
 Introduced in Windows 10 version 1803.
 """
 
+import contextlib
 import json
 import sqlite3
 import tempfile
@@ -125,10 +126,8 @@ class ActivitiesCacheParser:
         except sqlite3.Error:
             pass
         finally:
-            try:
+            with contextlib.suppress(OSError):
                 Path(tmp_path).unlink()
-            except OSError:
-                pass
 
     def _parse_activity_table(self, conn: sqlite3.Connection) -> None:
         """Parse the Activity table."""
@@ -236,10 +235,10 @@ class ActivitiesCacheParser:
             status = 0
 
             try:
-                is_local_only = bool(row["IsLocalOnly"]) if "IsLocalOnly" in row.keys() else False
-                etag = row["ETag"] if "ETag" in row.keys() else ""
-                package_id = row["PackageIdHash"] if "PackageIdHash" in row.keys() else ""
-                status = row["ActivityStatus"] if "ActivityStatus" in row.keys() else 0
+                is_local_only = bool(row["IsLocalOnly"]) if "IsLocalOnly" in row else False
+                etag = row.get("ETag", "")
+                package_id = row.get("PackageIdHash", "")
+                status = row.get("ActivityStatus", 0)
             except (KeyError, IndexError):
                 pass
 

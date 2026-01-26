@@ -8,6 +8,7 @@ Location:
 - %LOCALAPPDATA%\\Microsoft\\Windows\\Notifications\\appdb.dat
 """
 
+import contextlib
 import json
 import sqlite3
 import tempfile
@@ -114,10 +115,8 @@ class NotificationsParser:
         except sqlite3.Error:
             pass
         finally:
-            try:
+            with contextlib.suppress(OSError):
                 Path(tmp_path).unlink()
-            except OSError:
-                pass
 
     def _parse_handlers_table(self, conn: sqlite3.Connection) -> None:
         """Parse NotificationHandler table."""

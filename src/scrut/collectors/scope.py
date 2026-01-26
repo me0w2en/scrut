@@ -4,10 +4,9 @@ Defines what artifacts to collect, time ranges, and filtering criteria.
 Supports predefined scopes for common investigation types.
 """
 
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -75,9 +74,7 @@ class CollectionScope(BaseModel):
             return True
         if self.time_range_start and timestamp < self.time_range_start:
             return False
-        if self.time_range_end and timestamp > self.time_range_end:
-            return False
-        return True
+        return not (self.time_range_end and timestamp > self.time_range_end)
 
 
 class ScopeBuilder:

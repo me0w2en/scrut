@@ -391,13 +391,10 @@ class JumpListParser:
 
         version = struct.unpack("<I", data[0:4])[0]
         num_entries = struct.unpack("<I", data[4:8])[0]
-        num_pinned = struct.unpack("<I", data[8:12])[0]
+        struct.unpack("<I", data[8:12])[0]
 
-        # Entry size varies by version
-        if version >= 3:
-            entry_size = 130  # Plus variable string
-        else:
-            entry_size = 114
+        # Entry size varies by version (130 for v3+, 114 for older)
+        entry_size = 130 if version >= 3 else 114
 
         offset = 32
         for _ in range(num_entries):
@@ -405,13 +402,13 @@ class JumpListParser:
                 break
 
             # Entry ID (hash)
-            entry_id = data[offset + 88:offset + 104].hex() if version >= 3 else ""
+            data[offset + 88:offset + 104].hex() if version >= 3 else ""
 
             # Access count at offset 8
             # Last access at offset 16 (FILETIME)
             if offset + 24 <= len(data):
                 access_time = struct.unpack("<Q", data[offset + 16:offset + 24])[0]
-                last_access = _filetime_to_datetime(access_time)
+                _filetime_to_datetime(access_time)
 
             # String length at end of fixed part
             str_offset = offset + entry_size - 4

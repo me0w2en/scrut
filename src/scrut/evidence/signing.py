@@ -8,12 +8,11 @@ import base64
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel
-
 
 SignatureAlgorithm = Literal["rsa-sha256", "ed25519"]
 
@@ -89,7 +88,7 @@ class BundleSigner:
             signature_info = SignatureInfo(
                 algorithm=self._key.algorithm,
                 key_id=self._key.key_id,
-                signed_at=datetime.now(timezone.utc),
+                signed_at=datetime.now(UTC),
                 signature=signature_b64,
                 manifest_hash=manifest_hash,
                 signer_name=self._key.signer_name,
@@ -143,11 +142,11 @@ class BundleSigner:
             )
             return signature
 
-        except ImportError:
+        except ImportError as e:
             raise ImportError(
                 "cryptography package required for RSA signing. "
                 "Install with: pip install cryptography"
-            )
+            ) from e
 
     def _sign_ed25519(self, data: bytes) -> bytes:
         """Sign data using Ed25519."""
@@ -165,11 +164,11 @@ class BundleSigner:
             signature = private_key.sign(data)
             return signature
 
-        except ImportError:
+        except ImportError as e:
             raise ImportError(
                 "cryptography package required for Ed25519 signing. "
                 "Install with: pip install cryptography"
-            )
+            ) from e
 
 
 class BundleVerifier:
@@ -302,11 +301,11 @@ class BundleVerifier:
                 hashes.SHA256(),
             )
 
-        except ImportError:
+        except ImportError as e:
             raise ImportError(
                 "cryptography package required for RSA verification. "
                 "Install with: pip install cryptography"
-            )
+            ) from e
 
     def _verify_ed25519(
         self, key: VerificationKey, data: bytes, signature: bytes
@@ -323,11 +322,11 @@ class BundleVerifier:
 
             public_key.verify(signature, data)
 
-        except ImportError:
+        except ImportError as e:
             raise ImportError(
                 "cryptography package required for Ed25519 verification. "
                 "Install with: pip install cryptography"
-            )
+            ) from e
 
 
 def generate_key_pair(
@@ -387,11 +386,11 @@ def generate_key_pair(
 
         return signing_key, verification_key
 
-    except ImportError:
+    except ImportError as e:
         raise ImportError(
             "cryptography package required for key generation. "
             "Install with: pip install cryptography"
-        )
+        ) from e
 
 
 def load_signing_key(

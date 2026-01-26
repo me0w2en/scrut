@@ -8,6 +8,7 @@ Locations:
 - Each app has a GUID subkey with LastAccessedTime and AppId
 """
 
+import contextlib
 import re
 import struct
 from collections.abc import Iterator
@@ -229,10 +230,8 @@ class RecentAppsFileParser(BaseParser):
                 record_data["app_id"] = entry.app_id
             if entry.app_path:
                 record_data["app_path"] = entry.app_path
-                try:
+                with contextlib.suppress(Exception):
                     record_data["filename"] = Path(entry.app_path).name
-                except Exception:
-                    pass
             if entry.last_accessed:
                 record_data["last_accessed"] = entry.last_accessed.isoformat()
             if entry.launch_count:

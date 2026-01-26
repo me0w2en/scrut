@@ -53,10 +53,7 @@ def output_json(data: Any, file: Any = None) -> None:
     if file is None:
         file = sys.stdout
 
-    if isinstance(data, BaseModel):
-        output = data.model_dump(mode="json")
-    else:
-        output = data
+    output = data.model_dump(mode="json") if isinstance(data, BaseModel) else data
 
     json.dump(output, file, cls=JSONEncoder, ensure_ascii=False)
     file.write("\n")
@@ -74,10 +71,7 @@ def output_jsonl(records: Iterator[Any], file: Any = None) -> None:
         file = sys.stdout
 
     for record in records:
-        if isinstance(record, BaseModel):
-            output = record.model_dump(mode="json")
-        else:
-            output = record
+        output = record.model_dump(mode="json") if isinstance(record, BaseModel) else record
         json.dump(output, file, cls=JSONEncoder, ensure_ascii=False)
         file.write("\n")
         file.flush()

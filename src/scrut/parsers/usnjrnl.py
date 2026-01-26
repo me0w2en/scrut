@@ -241,7 +241,7 @@ class UsnJrnlParser:
 
             # Parse based on version
             major_version = struct.unpack("<H", record_data[4:6])[0]
-            minor_version = struct.unpack("<H", record_data[6:8])[0]
+            struct.unpack("<H", record_data[6:8])[0]
 
             record = None
             if major_version == USN_RECORD_V2:
@@ -312,9 +312,9 @@ class UsnJrnlParser:
 
         # V3 uses 128-bit file references
         file_ref_low = struct.unpack("<Q", data[8:16])[0]
-        file_ref_high = struct.unpack("<Q", data[16:24])[0]
+        struct.unpack("<Q", data[16:24])[0]
         parent_ref_low = struct.unpack("<Q", data[24:32])[0]
-        parent_ref_high = struct.unpack("<Q", data[32:40])[0]
+        struct.unpack("<Q", data[32:40])[0]
 
         usn = struct.unpack("<Q", data[40:48])[0]
         timestamp = _filetime_to_datetime(struct.unpack("<Q", data[48:56])[0])

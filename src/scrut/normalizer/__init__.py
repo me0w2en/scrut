@@ -6,9 +6,9 @@ Provides normalizers to transform parsed records into:
 - IOCs: Indicators of compromise (IPs, domains, hashes, URLs)
 """
 
-from scrut.normalizer.timeline import TimelineNormalizer, TimelineEvent
-from scrut.normalizer.entity import EntityExtractor, Entity
-from scrut.normalizer.ioc import IOCExtractor, IOC
+from scrut.normalizer.entity import Entity, EntityExtractor
+from scrut.normalizer.ioc import IOC, IOCExtractor
+from scrut.normalizer.timeline import TimelineEvent, TimelineNormalizer
 
 __all__ = [
     "TimelineNormalizer",

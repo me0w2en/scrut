@@ -92,8 +92,8 @@ class EvtxChunk:
         # Offset 48-52: free space offset (uint32)
         # Offset 128+: string table, template table, records
 
-        header_size = struct.unpack("<I", self.data[40:44])[0]
-        last_record_offset = struct.unpack("<I", self.data[44:48])[0]
+        struct.unpack("<I", self.data[40:44])[0]
+        struct.unpack("<I", self.data[44:48])[0]
         free_space_offset = struct.unpack("<I", self.data[48:52])[0]
 
         # Records start after header (typically at offset 512 within chunk)

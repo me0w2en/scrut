@@ -357,9 +357,8 @@ class FirewallFileParser(BaseParser):
                 indicators.append("dangerous_port_open")
 
         # Public profile with Allow
-        if rule.action == "Allow" and "Public" in rule.profiles:
-            if rule.enabled:
-                indicators.append("public_profile_allow")
+        if rule.action == "Allow" and "Public" in rule.profiles and rule.enabled:
+            indicators.append("public_profile_allow")
 
         # Edge traversal enabled (bypasses NAT)
         if rule.edge_traversal:

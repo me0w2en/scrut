@@ -4,6 +4,7 @@ Parses Windows Recycle Bin files ($I, $R, INFO2) to extract
 information about deleted files.
 """
 
+import contextlib
 import struct
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -96,10 +97,8 @@ class RecycleBinIParser:
         # Path (UTF-16LE, starting at offset 28)
         path = ""
         if path_len > 0 and 28 + path_len * 2 <= len(self.data):
-            try:
+            with contextlib.suppress(UnicodeDecodeError):
                 path = self.data[28:28 + path_len * 2].decode("utf-16-le").rstrip("\x00")
-            except UnicodeDecodeError:
-                pass
 
         if path:
             self.entry = RecycleBinEntry(
@@ -129,10 +128,8 @@ class RecycleBinIParser:
         # Path (UTF-16LE, starting at offset 28)
         path = ""
         if path_byte_len > 0 and 28 + path_byte_len <= len(self.data):
-            try:
+            with contextlib.suppress(UnicodeDecodeError):
                 path = self.data[28:28 + path_byte_len].decode("utf-16-le").rstrip("\x00")
-            except UnicodeDecodeError:
-                pass
 
         if path:
             self.entry = RecycleBinEntry(

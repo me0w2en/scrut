@@ -4,6 +4,7 @@ Parses Windows Scheduled Task files (XML format and legacy .job format)
 to extract task configurations for persistence analysis.
 """
 
+import contextlib
 import struct
 import xml.etree.ElementTree as ET
 from collections.abc import Iterator
@@ -212,13 +213,11 @@ class XMLTaskParser:
 
         date = elem.find("Date", ns) or elem.find("task:Date", ns)
         if date is not None and date.text:
-            try:
+            with contextlib.suppress(ValueError):
                 # ISO format: 2024-01-15T10:30:00
                 self.task.date_created = datetime.fromisoformat(
                     date.text.replace("Z", "+00:00")
                 )
-            except ValueError:
-                pass
 
         uri = elem.find("URI", ns) or elem.find("task:URI", ns)
         if uri is not None and uri.text:
@@ -251,21 +250,17 @@ class XMLTaskParser:
 
                 start = trig_elem.find("StartBoundary", ns) or trig_elem.find("task:StartBoundary", ns)
                 if start is not None and start.text:
-                    try:
+                    with contextlib.suppress(ValueError):
                         trigger.start_time = datetime.fromisoformat(
                             start.text.replace("Z", "+00:00")
                         )
-                    except ValueError:
-                        pass
 
                 end = trig_elem.find("EndBoundary", ns) or trig_elem.find("task:EndBoundary", ns)
                 if end is not None and end.text:
-                    try:
+                    with contextlib.suppress(ValueError):
                         trigger.end_time = datetime.fromisoformat(
                             end.text.replace("Z", "+00:00")
                         )
-                    except ValueError:
-                        pass
 
                 # User ID (for logon trigger)
                 user = trig_elem.find("UserId", ns) or trig_elem.find("task:UserId", ns)
@@ -361,33 +356,33 @@ class JobFileParser:
             return
 
         # File version at offset 2
-        file_version = struct.unpack("<H", self.data[2:4])[0]
+        struct.unpack("<H", self.data[2:4])[0]
 
         # UUID at offset 4 (16 bytes)
 
         # App name offset at offset 20
-        app_name_offset = struct.unpack("<H", self.data[20:22])[0]
+        struct.unpack("<H", self.data[20:22])[0]
 
-        trigger_offset = struct.unpack("<H", self.data[22:24])[0]
-        error_retry_count = struct.unpack("<H", self.data[24:26])[0]
-        error_retry_interval = struct.unpack("<H", self.data[26:28])[0]
-        idle_deadline = struct.unpack("<H", self.data[28:30])[0]
-        idle_wait = struct.unpack("<H", self.data[30:32])[0]
+        struct.unpack("<H", self.data[22:24])[0]
+        struct.unpack("<H", self.data[24:26])[0]
+        struct.unpack("<H", self.data[26:28])[0]
+        struct.unpack("<H", self.data[28:30])[0]
+        struct.unpack("<H", self.data[30:32])[0]
 
         # Priority at offset 32
-        priority = struct.unpack("<I", self.data[32:36])[0]
+        struct.unpack("<I", self.data[32:36])[0]
 
         # Maximum run time at offset 36
-        max_run_time = struct.unpack("<I", self.data[36:40])[0]
+        struct.unpack("<I", self.data[36:40])[0]
 
         # Exit code at offset 40
-        exit_code = struct.unpack("<I", self.data[40:44])[0]
+        struct.unpack("<I", self.data[40:44])[0]
 
         # Status at offset 44
-        status = struct.unpack("<I", self.data[44:48])[0]
+        struct.unpack("<I", self.data[44:48])[0]
 
         # Flags at offset 48
-        flags = struct.unpack("<I", self.data[48:52])[0]
+        struct.unpack("<I", self.data[48:52])[0]
 
         # Last run time (SYSTEMTIME) at offset 52
         last_run = self._parse_systemtime(52)
@@ -403,7 +398,7 @@ class JobFileParser:
         offset = 68
 
         if offset + 2 <= len(self.data):
-            running_count = struct.unpack("<H", self.data[offset:offset + 2])[0]
+            struct.unpack("<H", self.data[offset:offset + 2])[0]
             offset += 2
 
         # Application name (Unicode)
@@ -497,7 +492,7 @@ class JobFileParser:
             return None
 
         # Trigger size at offset 0
-        trigger_size = struct.unpack("<H", self.data[offset:offset + 2])[0]
+        struct.unpack("<H", self.data[offset:offset + 2])[0]
 
         # Reserved at offset 2
 

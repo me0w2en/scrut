@@ -200,9 +200,9 @@ class ETLParser:
         try:
             # EVENT_HEADER structure
             size = struct.unpack("<H", self.data[offset : offset + 2])[0]
-            header_type = struct.unpack("<H", self.data[offset + 2 : offset + 4])[0]
-            flags = struct.unpack("<H", self.data[offset + 4 : offset + 6])[0]
-            event_property = struct.unpack("<H", self.data[offset + 6 : offset + 8])[0]
+            struct.unpack("<H", self.data[offset + 2 : offset + 4])[0]
+            struct.unpack("<H", self.data[offset + 4 : offset + 6])[0]
+            struct.unpack("<H", self.data[offset + 6 : offset + 8])[0]
             thread_id = struct.unpack("<I", self.data[offset + 8 : offset + 12])[0]
             process_id = struct.unpack("<I", self.data[offset + 12 : offset + 16])[0]
 
@@ -218,7 +218,7 @@ class ETLParser:
             # EVENT_DESCRIPTOR at offset 40
             event_id = struct.unpack("<H", self.data[offset + 40 : offset + 42])[0]
             version = self.data[offset + 42]
-            channel = self.data[offset + 43]
+            self.data[offset + 43]
             level = self.data[offset + 44]
             opcode = self.data[offset + 45]
             task = struct.unpack("<H", self.data[offset + 46 : offset + 48])[0]

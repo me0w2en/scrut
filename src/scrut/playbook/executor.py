@@ -7,7 +7,6 @@ and progress reporting.
 import shlex
 import subprocess
 import sys
-import time
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -122,10 +121,7 @@ class PlaybookExecutor:
             self._run.current_step = step_id
             self._emit_progress(step, "starting")
 
-            if dry_run:
-                result = self._dry_run_step(step)
-            else:
-                result = self._execute_step(step)
+            result = self._dry_run_step(step) if dry_run else self._execute_step(step)
 
             self._run.step_results.append(result)
 

@@ -4,6 +4,7 @@ Parses browser history databases from Chrome, Edge, Firefox, and IE
 to extract browsing activity evidence.
 """
 
+import contextlib
 import sqlite3
 import struct
 import tempfile
@@ -126,10 +127,8 @@ class ChromeHistoryParser:
             # Fallback to pattern matching if SQLite fails
             self._parse_raw()
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 Path(temp_path).unlink()
-            except Exception:
-                pass
 
     def _parse_with_sqlite(self, db_path: str) -> None:
         """Parse using SQLite."""
@@ -273,10 +272,8 @@ class FirefoxHistoryParser:
         except Exception:
             self._parse_raw()
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 Path(temp_path).unlink()
-            except Exception:
-                pass
 
     def _parse_with_sqlite(self, db_path: str) -> None:
         """Parse using SQLite."""

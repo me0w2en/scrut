@@ -20,6 +20,7 @@ Cache sizes:
 - thumbcache_exif.db (EXIF rotation thumbnails)
 """
 
+import contextlib
 import struct
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -170,7 +171,7 @@ class ThumbcacheParser:
             if sig != THUMBCACHE_SIGNATURE:
                 return None
 
-            entry_size = struct.unpack("<I", self.data[offset + 4 : offset + 8])[0]
+            struct.unpack("<I", self.data[offset + 4 : offset + 8])[0]
             entry_hash = struct.unpack("<Q", self.data[offset + 8 : offset + 16])[0]
             extension = self.data[offset + 16 : offset + 20].decode("ascii", errors="replace").rstrip("\x00")
             identifier_size = struct.unpack("<I", self.data[offset + 20 : offset + 24])[0]
@@ -180,12 +181,10 @@ class ThumbcacheParser:
             # Extract identifier if present
             identifier = ""
             if identifier_size > 0 and offset + 32 + identifier_size <= len(self.data):
-                try:
+                with contextlib.suppress(Exception):
                     identifier = self.data[offset + 32 : offset + 32 + identifier_size].decode(
                         "utf-16-le", errors="replace"
                     ).rstrip("\x00")
-                except Exception:
-                    pass
 
             # Calculate checksums (header and data)
             header_checksum = 0

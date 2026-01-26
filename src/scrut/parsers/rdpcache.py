@@ -11,6 +11,7 @@ Locations:
 - Registry: HKCU\\Software\\Microsoft\\Terminal Server Client\\Servers\
 """
 
+import contextlib
 import struct
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -256,10 +257,8 @@ class RDPDefaultParser:
                         server = value.strip()
                         if ":" in server:
                             server, port_str = server.rsplit(":", 1)
-                            try:
+                            with contextlib.suppress(ValueError):
                                 port = int(port_str)
-                            except ValueError:
-                                pass
                     elif key.strip().lower() == "username":
                         username = value.strip()
                     elif key.strip().lower() == "domain":
