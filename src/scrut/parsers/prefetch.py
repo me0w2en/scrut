@@ -181,7 +181,7 @@ def _xpress_huffman_decompress(data: bytes, output_size: int) -> bytes:
             code_sizes.append(byte & 0x0F)  # Low nibble: even symbol
             code_sizes.append((byte >> 4) & 0x0F)  # High nibble: odd symbol
 
-        # Build Huffman tree using sorted symbols approach (like dissect)
+        # Build Huffman tree using sorted symbols approach
         # Sort symbols by (code_length, symbol_value)
         symbols = [(code_sizes[i], i) for i in range(512)]
         symbols.sort()

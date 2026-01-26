@@ -42,11 +42,8 @@ dev = [
 signing = [
     "cryptography>=42.0.0",
 ]
-dissect = [
-    "dissect>=3.0",
-]
 all = [
-    "scrut[signing,dissect]",
+    "scrut[signing]",
 ]
 dist = [
     "pyinstaller>=6.0.0",
