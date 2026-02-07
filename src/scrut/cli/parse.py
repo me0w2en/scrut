@@ -9,15 +9,317 @@ import click
 
 from scrut.cli.output import OutputFormatter
 from scrut.core.errors import ScrutError
+from scrut.core.pagination import CursorGenerator, Paginator, parse_time_filter
 from scrut.core.target import TargetManager
 from scrut.models.case import TargetType
 from scrut.models.metrics import StepMetrics
+
+# Import all parsers to trigger registration
+import scrut.parsers.activitiescache  # noqa: F401
+import scrut.parsers.amcache  # noqa: F401
+import scrut.parsers.bam  # noqa: F401
+import scrut.parsers.bits  # noqa: F401
+import scrut.parsers.browser  # noqa: F401
+import scrut.parsers.defender  # noqa: F401
+import scrut.parsers.etl  # noqa: F401
+import scrut.parsers.evtx  # noqa: F401
+import scrut.parsers.firewall  # noqa: F401
+import scrut.parsers.jumplists  # noqa: F401
+import scrut.parsers.lnk  # noqa: F401
+import scrut.parsers.mft  # noqa: F401
+import scrut.parsers.muicache  # noqa: F401
+import scrut.parsers.networkconfig  # noqa: F401
+import scrut.parsers.notifications  # noqa: F401
+import scrut.parsers.powershell  # noqa: F401
+import scrut.parsers.prefetch  # noqa: F401
+import scrut.parsers.rdpcache  # noqa: F401
+import scrut.parsers.recentapps  # noqa: F401
+import scrut.parsers.recyclebin  # noqa: F401
+import scrut.parsers.registry  # noqa: F401
+import scrut.parsers.scheduledtasks  # noqa: F401
+import scrut.parsers.searchhistory  # noqa: F401
+import scrut.parsers.services  # noqa: F401
+import scrut.parsers.shellbags  # noqa: F401
+import scrut.parsers.shimcache  # noqa: F401
+import scrut.parsers.srum  # noqa: F401
+import scrut.parsers.syscache  # noqa: F401
+import scrut.parsers.thumbcache  # noqa: F401
+import scrut.parsers.typedurls  # noqa: F401
+import scrut.parsers.usnjrnl  # noqa: F401
+import scrut.parsers.wer  # noqa: F401
+import scrut.parsers.wmi  # noqa: F401
+from scrut.parsers.base import ParserRegistry
 
 
 @click.group()
 def parse() -> None:
     """Parse forensic artifacts to normalized JSON/JSONL."""
     pass
+
+
+def _generic_parse(
+    ctx: click.Context,
+    artifact_type: str,
+    artifact_path: Path | None,
+    target_id: str | None,
+    image_artifact_path: str | None,
+    limit: int | None,
+    since: str | None,
+    until: str | None,
+    cursor: str | None,
+    summary: bool,
+) -> None:
+    """Generic parser execution with pagination support.
+
+    This function handles the common logic for all artifact parsers,
+    including pagination, time filtering, and metrics.
+    """
+    formatter: OutputFormatter = ctx.obj["formatter"]
+
+    # Validate arguments
+    if target_id and not image_artifact_path:
+        raise click.ClickException(
+            "--target requires --artifact to specify the file path inside the image"
+        )
+
+    if image_artifact_path and not target_id:
+        raise click.ClickException(
+            "--artifact requires --target to specify which image to read from"
+        )
+
+    if not target_id and not artifact_path:
+        raise click.ClickException(
+            "Provide either:\n"
+            "  1. --target <id> --artifact <path> to parse from an image\n"
+            "  2. A local file path as argument"
+        )
+
+    # Get parser class from registry
+    parser_class = ParserRegistry.get(artifact_type)
+    if parser_class is None:
+        supported = ParserRegistry.supported_types()
+        raise click.ClickException(
+            f"Unknown artifact type: {artifact_type}\n"
+            f"Supported types: {', '.join(sorted(set(supported)))}"
+        )
+
+    try:
+        data, source_hash, tid, bytes_read = _get_artifact_data(
+            ctx, target_id, image_artifact_path, artifact_path
+        )
+
+        parser = parser_class(
+            target_id=tid,
+            artifact_path=image_artifact_path or str(artifact_path),
+            source_hash=source_hash,
+            timezone_str=ctx.obj.get("timezone", "UTC"),
+        )
+
+        # Setup pagination
+        paginator = Paginator(limit=limit, cursor=cursor)
+        since_dt = parse_time_filter(since)
+        until_dt = parse_time_filter(until)
+
+        start_time = time.time()
+        records_processed = 0
+        records_output = 0
+        last_timestamp = None
+        last_record_id = None
+
+        for record in parser.parse_bytes(data):
+            records_processed += 1
+
+            # Skip based on pagination offset
+            if paginator.should_skip(records_processed - 1):
+                continue
+
+            # Time filtering
+            if since_dt and record.timestamp and record.timestamp < since_dt:
+                continue
+
+            if until_dt and record.timestamp and record.timestamp > until_dt:
+                continue
+
+            if not summary:
+                formatter.output(record.model_dump(mode="json", exclude_none=True))
+
+            records_output += 1
+            last_timestamp = record.timestamp
+            last_record_id = record.record_id
+
+            if paginator.should_stop():
+                break
+
+        # Generate pagination metadata
+        has_more = limit is not None and records_output >= limit
+        next_cursor = None
+        if has_more:
+            next_cursor = CursorGenerator.create_next_cursor(
+                current_offset=paginator.offset + records_output,
+                last_timestamp=last_timestamp,
+                last_record_id=last_record_id,
+            )
+
+        duration_ms = int((time.time() - start_time) * 1000)
+
+        # Record metrics
+        StepMetrics(
+            run_id=tid,
+            step_name=f"parse_{artifact_type}",
+            duration_ms=duration_ms,
+            records_processed=records_processed,
+            records_output=records_output,
+            bytes_read=bytes_read,
+            bytes_written=0,
+            warnings=0,
+            errors=0,
+            skipped=records_processed - records_output,
+        )
+
+        if summary:
+            formatter.output({
+                "artifact_type": artifact_type,
+                "records_count": records_output,
+                "records_processed": records_processed,
+                "duration_ms": duration_ms,
+            })
+        else:
+            formatter.flush_table(title=f"{artifact_type.upper()} Records ({records_output} total)")
+
+        formatter.pagination(
+            has_more=has_more,
+            cursor=next_cursor,
+            records_returned=records_output,
+        )
+
+        click.echo(f"Parsed {records_output} {artifact_type} record(s) in {duration_ms}ms", err=True)
+
+    except ScrutError as e:
+        formatter.error(e.to_structured_error())
+        ctx.exit(1)
+    except click.ClickException:
+        raise
+    except Exception as e:
+        formatter.error({
+            "code": "PARSE_ERROR",
+            "message": str(e),
+            "remediation": f"Check that the file is a valid {artifact_type} artifact",
+            "retryable": False,
+        })
+        ctx.exit(1)
+
+
+# ============================================================================
+# Generic artifact type commands - dynamically generated for all parsers
+# ============================================================================
+
+def _create_parser_command(artifact_type: str, description: str) -> click.Command:
+    """Factory function to create a parse command for an artifact type."""
+
+    @click.command(artifact_type)
+    @click.argument("artifact_path", type=click.Path(path_type=Path), required=False)
+    @click.option(
+        "--target", "-t", "target_id",
+        help="Target ID (image) to parse from. Use with --artifact."
+    )
+    @click.option(
+        "--artifact", "-a", "image_artifact_path",
+        help="Path inside the image"
+    )
+    @click.option("--limit", "-l", type=int, default=None, help="Limit number of records")
+    @click.option("--since", type=str, default=None, help="Filter records since timestamp (ISO-8601 or relative: 7d, 24h)")
+    @click.option("--until", type=str, default=None, help="Filter records until timestamp")
+    @click.option("--cursor", type=str, default=None, help="Pagination cursor from previous request")
+    @click.option("--summary", is_flag=True, help="Output count only, no records")
+    @click.pass_context
+    def cmd(
+        ctx: click.Context,
+        artifact_path: Path | None,
+        target_id: str | None,
+        image_artifact_path: str | None,
+        limit: int | None,
+        since: str | None,
+        until: str | None,
+        cursor: str | None,
+        summary: bool,
+    ) -> None:
+        _generic_parse(
+            ctx, artifact_type, artifact_path, target_id, image_artifact_path,
+            limit, since, until, cursor, summary
+        )
+
+    cmd.__doc__ = description
+    return cmd
+
+
+# Register all parser commands
+_PARSER_DESCRIPTIONS = {
+    "shimcache": "Parse ShimCache (AppCompatCache) for program execution evidence.",
+    "amcache": "Parse Amcache.hve for application execution history with SHA1 hashes.",
+    "mft": "Parse $MFT for file metadata and timestomping detection.",
+    "usnjrnl": "Parse USN Journal ($J) for file system change history.",
+    "lnk": "Parse Windows shortcut (LNK) files.",
+    "shellbags": "Parse ShellBags for folder navigation history.",
+    "jumplists": "Parse Jump Lists for recent/pinned items.",
+    "browser": "Parse browser history (Chrome, Edge, Firefox).",
+    "scheduledtasks": "Parse Scheduled Tasks XML definitions.",
+    "recyclebin": "Parse Recycle Bin ($I files, INFO2).",
+    "srum": "Parse SRUM (System Resource Usage Monitor) database.",
+    "powershell": "Parse PowerShell console history with risk analysis.",
+    "rdpcache": "Parse RDP bitmap cache and connection files.",
+    "defender": "Parse Windows Defender logs (MPLog, Quarantine).",
+    "bits": "Parse BITS (Background Intelligent Transfer Service) jobs.",
+    "activitiescache": "Parse Windows Timeline (ActivitiesCache.db).",
+    "wmi": "Parse WMI persistence mechanisms (OBJECTS.DATA).",
+    "etl": "Parse ETL (Event Trace Log) files.",
+    "services": "Parse Windows Services configuration from SYSTEM hive.",
+    "firewall": "Parse Windows Firewall rules from registry.",
+    "networkconfig": "Parse network interface and profile configuration.",
+    "muicache": "Parse MUICache for program execution evidence.",
+    "wer": "Parse Windows Error Reporting files for crash data.",
+    "notifications": "Parse Windows notification database (wpndatabase.db).",
+    "thumbcache": "Parse thumbnail cache (thumbcache_*.db) files.",
+    "bam": "Parse BAM/DAM (Background Activity Moderator) for execution times.",
+    "searchhistory": "Parse search history (WordWheelQuery, TypedPaths, RunMRU).",
+    "typedurls": "Parse IE/Edge typed URL history.",
+    "recentapps": "Parse recent apps with timestamps (Windows 10+).",
+    "syscache": "Parse syscache.hve ObjectTable (Windows 7).",
+}
+
+for _artifact_type, _description in _PARSER_DESCRIPTIONS.items():
+    parse.add_command(_create_parser_command(_artifact_type, _description))
+
+
+@parse.command("types")
+@click.pass_context
+def list_types(ctx: click.Context) -> None:
+    """List all available artifact types that can be parsed."""
+    formatter: OutputFormatter = ctx.obj["formatter"]
+
+    types_list = []
+    all_types = ParserRegistry.supported_types()
+    seen = set()
+
+    for artifact_type in sorted(all_types):
+        if artifact_type in seen:
+            continue
+        seen.add(artifact_type)
+
+        parser_class = ParserRegistry.get(artifact_type)
+        if parser_class:
+            types_list.append({
+                "type": artifact_type,
+                "parser": parser_class.name,
+                "version": parser_class.version,
+            })
+
+    for item in types_list:
+        formatter.output(item)
+
+    if formatter.is_human():
+        formatter.flush_table(title="Available Parser Types")
+
+    click.echo(f"Found {len(types_list)} parser types", err=True)
 
 
 def _get_artifact_data(
