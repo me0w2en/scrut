@@ -8,6 +8,8 @@ Collects common Windows forensic artifacts:
 - And more
 """
 
+from __future__ import annotations
+
 import hashlib
 import shutil
 from collections.abc import Iterator
@@ -15,11 +17,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
 from scrut.collectors.scope import ArtifactCategory, CollectionScope
+
+if TYPE_CHECKING:
+    from scrut.images.filesystem.base import FilesystemReader
 
 
 class WindowsArtifactType(str, Enum):
@@ -58,10 +63,10 @@ class WindowsArtifact:
     artifact_type: WindowsArtifactType
     name: str
     category: ArtifactCategory
-    paths: list[str]  # Paths relative to system root or user profile
+    paths: list[str]
     description: str = ""
     requires_admin: bool = False
-    priority: int = 1  # 1 = highest priority
+    priority: int = 1
     file_pattern: str | None = None
 
 
@@ -286,6 +291,7 @@ class WindowsCollector:
         system_root: Path,
         output_dir: Path,
         scope: CollectionScope | None = None,
+        filesystem: FilesystemReader | None = None,
     ) -> None:
         """Initialize the collector.
 
@@ -293,10 +299,12 @@ class WindowsCollector:
             system_root: Path to Windows system root (e.g., mounted image)
             output_dir: Directory to store collected artifacts
             scope: Collection scope (defaults to all)
+            filesystem: Optional FilesystemReader for image-based collection
         """
         self._system_root = system_root
         self._output_dir = output_dir
         self._scope = scope
+        self._filesystem = filesystem
         self._collected: list[CollectedFile] = []
         self._errors: list[str] = []
         self._skipped: list[str] = []
@@ -379,12 +387,18 @@ class WindowsCollector:
         """Collect a single artifact."""
         for path_pattern in artifact.paths:
             if "*" in path_pattern:
-                self._collect_glob(artifact, path_pattern)
+                if self._filesystem:
+                    self._collect_glob_image(artifact, path_pattern)
+                else:
+                    self._collect_glob(artifact, path_pattern)
             else:
-                self._collect_file(artifact, path_pattern)
+                if self._filesystem:
+                    self._collect_file_image(artifact, path_pattern)
+                else:
+                    self._collect_file(artifact, path_pattern)
 
     def _collect_glob(self, artifact: WindowsArtifact, pattern: str) -> None:
-        """Collect files matching a glob pattern."""
+        """Collect files matching a glob pattern from local filesystem."""
         try:
             for path in self._system_root.glob(pattern):
                 if path.is_file():
@@ -401,7 +415,7 @@ class WindowsCollector:
             self._errors.append(f"Error collecting {artifact.name}: {e}")
 
     def _collect_file(self, artifact: WindowsArtifact, rel_path: str) -> None:
-        """Collect a single file."""
+        """Collect a single file from local filesystem."""
         source_path = self._system_root / rel_path
 
         if not source_path.exists():
@@ -468,6 +482,109 @@ class WindowsCollector:
             )
         except Exception as e:
             self._errors.append(f"{artifact.name}: {source_path} - {e}")
+
+    def _collect_glob_image(self, artifact: WindowsArtifact, pattern: str) -> None:
+        """Collect files matching a glob pattern from image filesystem."""
+        assert self._filesystem is not None
+        try:
+            import fnmatch
+
+            parts = pattern.split("*", 1)
+            base_dir = parts[0].rstrip("/") if parts[0] else ""
+
+            if not self._filesystem.exists(base_dir or "."):
+                self._skipped.append(f"{artifact.name}: {base_dir} not found in image")
+                return
+
+            if artifact.file_pattern:
+                search_dir = base_dir if base_dir else ""
+                for file_path in self._filesystem.find_files(
+                    artifact.file_pattern, search_dir
+                ):
+                    if fnmatch.fnmatch(file_path, pattern):
+                        self._extract_file(artifact, file_path)
+            else:
+                search_dir = base_dir if base_dir else ""
+                for dirpath, _dirnames, filenames in self._filesystem.walk(search_dir):
+                    for filename in filenames:
+                        full_path = f"{dirpath}/{filename}" if dirpath else filename
+                        if fnmatch.fnmatch(full_path, pattern):
+                            self._extract_file(artifact, full_path)
+        except Exception as e:
+            self._errors.append(f"Error collecting {artifact.name}: {e}")
+
+    def _collect_file_image(self, artifact: WindowsArtifact, rel_path: str) -> None:
+        """Collect a single file from image filesystem."""
+        assert self._filesystem is not None
+        try:
+            if not self._filesystem.exists(rel_path):
+                self._skipped.append(f"{artifact.name}: {rel_path} not found in image")
+                return
+
+            if self._filesystem.is_directory(rel_path):
+                if artifact.file_pattern:
+                    for file_path in self._filesystem.find_files(
+                        artifact.file_pattern, rel_path
+                    ):
+                        self._extract_file(artifact, file_path)
+                else:
+                    for dirpath, _dirnames, filenames in self._filesystem.walk(
+                        rel_path
+                    ):
+                        for filename in filenames:
+                            full_path = (
+                                f"{dirpath}/{filename}" if dirpath else filename
+                            )
+                            self._extract_file(artifact, full_path)
+            else:
+                self._extract_file(artifact, rel_path)
+        except Exception as e:
+            self._errors.append(f"{artifact.name}: {rel_path} - {e}")
+
+    def _extract_file(self, artifact: WindowsArtifact, image_path: str) -> None:
+        """Extract a file from image filesystem to output directory with hashing."""
+        assert self._filesystem is not None
+        try:
+            file_info = self._filesystem.get_file_info(image_path)
+            size = file_info.size
+
+            if self._scope and size > self._scope.max_file_size_mb * 1024 * 1024:
+                self._skipped.append(
+                    f"{artifact.name}: {file_info.name} exceeds size limit"
+                )
+                return
+
+            data = self._filesystem.read_file(image_path)
+
+            dest_dir = self._output_dir / artifact.artifact_type.value
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            filename = image_path.rsplit("/", 1)[-1] if "/" in image_path else image_path
+            dest_path = dest_dir / filename
+
+            counter = 1
+            original_dest = dest_path
+            while dest_path.exists():
+                dest_path = original_dest.with_stem(f"{original_dest.stem}_{counter}")
+                counter += 1
+
+            dest_path.write_bytes(data)
+
+            md5_hash = hashlib.md5(data).hexdigest()
+            sha256_hash = hashlib.sha256(data).hexdigest()
+
+            collected = CollectedFile(
+                source_path=image_path,
+                dest_path=str(dest_path),
+                artifact_type=artifact.artifact_type.value,
+                size_bytes=size,
+                md5=md5_hash,
+                sha256=sha256_hash,
+                collected_at=datetime.now(),
+            )
+            self._collected.append(collected)
+
+        except Exception as e:
+            self._errors.append(f"{artifact.name}: {image_path} - {e}")
 
     def iter_artifacts(self) -> Iterator[WindowsArtifact]:
         """Iterate over artifacts to collect."""
