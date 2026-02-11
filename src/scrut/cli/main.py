@@ -8,6 +8,7 @@ import click
 
 from scrut import __version__
 from scrut.cli.bundle import bundle
+from scrut.cli.cache import cache
 from scrut.cli.case import case
 from scrut.cli.collect import collect
 from scrut.cli.output import OutputFormat, OutputFormatter, set_output_format
@@ -109,6 +110,7 @@ def cli(
     set_verbose(verbose)
     configure_logging(log_format=log_format, quiet=quiet)
 
+cli.add_command(cache)
 cli.add_command(case)
 cli.add_command(target)
 cli.add_command(parse)

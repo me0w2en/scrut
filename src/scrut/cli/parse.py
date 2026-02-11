@@ -7,13 +7,6 @@ from uuid import UUID
 
 import click
 
-from scrut.cli.output import OutputFormatter
-from scrut.core.errors import ScrutError
-from scrut.core.pagination import CursorGenerator, Paginator, parse_time_filter
-from scrut.core.target import TargetManager
-from scrut.models.case import TargetType
-from scrut.models.metrics import StepMetrics
-
 # Import all parsers to trigger registration
 import scrut.parsers.activitiescache  # noqa: F401
 import scrut.parsers.amcache  # noqa: F401
@@ -48,6 +41,13 @@ import scrut.parsers.typedurls  # noqa: F401
 import scrut.parsers.usnjrnl  # noqa: F401
 import scrut.parsers.wer  # noqa: F401
 import scrut.parsers.wmi  # noqa: F401
+from scrut.cli.output import OutputFormatter
+from scrut.core.cache import get_cache
+from scrut.core.errors import ScrutError
+from scrut.core.pagination import CursorGenerator, Paginator, parse_time_filter
+from scrut.core.target import TargetManager
+from scrut.models.case import TargetType
+from scrut.models.metrics import StepMetrics
 from scrut.parsers.base import ParserRegistry
 
 
@@ -68,11 +68,12 @@ def _generic_parse(
     until: str | None,
     cursor: str | None,
     summary: bool,
+    no_cache: bool = False,
 ) -> None:
     """Generic parser execution with pagination support.
 
     This function handles the common logic for all artifact parsers,
-    including pagination, time filtering, and metrics.
+    including pagination, time filtering, caching, and metrics.
     """
     formatter: OutputFormatter = ctx.obj["formatter"]
 
@@ -115,6 +116,20 @@ def _generic_parse(
             timezone_str=ctx.obj.get("timezone", "UTC"),
         )
 
+        use_cache = not no_cache and artifact_path is not None and not target_id
+        cached_records = None
+
+        if use_cache:
+            try:
+                cache = get_cache()
+                cached_records = cache.get(artifact_path, artifact_type)
+                if cached_records is not None:
+                    click.echo(f"Cache hit: {artifact_type} ({len(cached_records)} records)", err=True)
+                else:
+                    click.echo(f"Cache miss: {artifact_type}", err=True)
+            except Exception:
+                cached_records = None
+
         # Setup pagination
         paginator = Paginator(limit=limit, cursor=cursor)
         since_dt = parse_time_filter(since)
@@ -126,29 +141,63 @@ def _generic_parse(
         last_timestamp = None
         last_record_id = None
 
-        for record in parser.parse_bytes(data):
-            records_processed += 1
+        if cached_records is not None:
+            for record_dict in cached_records:
+                records_processed += 1
 
-            # Skip based on pagination offset
-            if paginator.should_skip(records_processed - 1):
-                continue
+                if paginator.should_skip(records_processed - 1):
+                    continue
 
-            # Time filtering
-            if since_dt and record.timestamp and record.timestamp < since_dt:
-                continue
+                ts = record_dict.get("timestamp")
+                if since_dt and ts and ts < since_dt.isoformat():
+                    continue
+                if until_dt and ts and ts > until_dt.isoformat():
+                    continue
 
-            if until_dt and record.timestamp and record.timestamp > until_dt:
-                continue
+                if not summary:
+                    formatter.output(record_dict)
 
-            if not summary:
-                formatter.output(record.model_dump(mode="json", exclude_none=True))
+                records_output += 1
+                last_timestamp = ts
+                last_record_id = record_dict.get("record_id")
 
-            records_output += 1
-            last_timestamp = record.timestamp
-            last_record_id = record.record_id
+                if paginator.should_stop():
+                    break
+        else:
+            all_record_dicts: list[dict] = [] if use_cache else None
 
-            if paginator.should_stop():
-                break
+            for record in parser.parse_bytes(data):
+                records_processed += 1
+                record_dict = record.model_dump(mode="json", exclude_none=True)
+
+                if all_record_dicts is not None:
+                    all_record_dicts.append(record_dict)
+
+                if paginator.should_skip(records_processed - 1):
+                    continue
+
+                if since_dt and record.timestamp and record.timestamp < since_dt:
+                    continue
+
+                if until_dt and record.timestamp and record.timestamp > until_dt:
+                    continue
+
+                if not summary:
+                    formatter.output(record_dict)
+
+                records_output += 1
+                last_timestamp = record.timestamp
+                last_record_id = record.record_id
+
+                if paginator.should_stop():
+                    break
+
+            if use_cache and all_record_dicts is not None:
+                try:
+                    cache = get_cache()
+                    cache.put(artifact_path, artifact_type, all_record_dicts)
+                except Exception:
+                    pass
 
         # Generate pagination metadata
         has_more = limit is not None and records_output >= limit
@@ -231,6 +280,7 @@ def _create_parser_command(artifact_type: str, description: str) -> click.Comman
     @click.option("--until", type=str, default=None, help="Filter records until timestamp")
     @click.option("--cursor", type=str, default=None, help="Pagination cursor from previous request")
     @click.option("--summary", is_flag=True, help="Output count only, no records")
+    @click.option("--no-cache", is_flag=True, default=False, help="Disable cache for this parse")
     @click.pass_context
     def cmd(
         ctx: click.Context,
@@ -242,10 +292,11 @@ def _create_parser_command(artifact_type: str, description: str) -> click.Comman
         until: str | None,
         cursor: str | None,
         summary: bool,
+        no_cache: bool,
     ) -> None:
         _generic_parse(
             ctx, artifact_type, artifact_path, target_id, image_artifact_path,
-            limit, since, until, cursor, summary
+            limit, since, until, cursor, summary, no_cache
         )
 
     cmd.__doc__ = description
