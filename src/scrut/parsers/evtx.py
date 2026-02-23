@@ -15,7 +15,7 @@ from scrut.models.record import ParsedRecord
 from scrut.parsers.base import BaseParser, ParserRegistry
 
 # Version of this parser
-PARSER_VERSION = "0.2.0"
+PARSER_VERSION = "0.3.0"
 
 # EVTX constants
 EVTX_SIGNATURE = b"ElfFile\x00"
@@ -23,47 +23,42 @@ EVTX_CHUNK_SIGNATURE = b"ElfChnk\x00"
 EVTX_RECORD_SIGNATURE = b"\x2a\x2a\x00\x00"  # **\x00\x00
 
 # BinXML token types
-BINXML_EOF = 0x00
-BINXML_OPEN_START_ELEMENT = 0x01
 BINXML_CLOSE_START_ELEMENT = 0x02
-BINXML_CLOSE_EMPTY_ELEMENT = 0x03
 BINXML_END_ELEMENT = 0x04
-BINXML_VALUE = 0x05
-BINXML_ATTRIBUTE = 0x06
-BINXML_CDATA_SECTION = 0x07
-BINXML_CHAR_REF = 0x08
-BINXML_ENTITY_REF = 0x09
-BINXML_PI_TARGET = 0x0A
-BINXML_PI_DATA = 0x0B
 BINXML_TEMPLATE_INSTANCE = 0x0C
 BINXML_NORMAL_SUBSTITUTION = 0x0D
 BINXML_OPTIONAL_SUBSTITUTION = 0x0E
-BINXML_FRAGMENT_HEADER = 0x0F
 
 # Value types
 VALUE_NULL = 0x00
 VALUE_STRING = 0x01
-VALUE_ANSI_STRING = 0x02
-VALUE_INT8 = 0x03
 VALUE_UINT8 = 0x04
-VALUE_INT16 = 0x05
 VALUE_UINT16 = 0x06
-VALUE_INT32 = 0x07
 VALUE_UINT32 = 0x08
-VALUE_INT64 = 0x09
 VALUE_UINT64 = 0x0A
-VALUE_REAL32 = 0x0B
-VALUE_REAL64 = 0x0C
-VALUE_BOOL = 0x0D
-VALUE_BINARY = 0x0E
 VALUE_GUID = 0x0F
-VALUE_SIZET = 0x10
 VALUE_FILETIME = 0x11
-VALUE_SYSTEMTIME = 0x12
 VALUE_SID = 0x13
-VALUE_HEX32 = 0x14
-VALUE_HEX64 = 0x15
 VALUE_BINXML = 0x21
+
+# "EventID" as UTF-16LE for template body scanning
+_EVENTID_UTF16LE = "EventID".encode("utf-16-le")
+
+
+class _TemplateInfo:
+    """Parsed template definition with descriptors and EventID index."""
+
+    __slots__ = ("descriptors", "eventid_sub_id", "total_def_size")
+
+    def __init__(
+        self,
+        descriptors: list[tuple[int, int]],
+        eventid_sub_id: int | None,
+        total_def_size: int,
+    ) -> None:
+        self.descriptors = descriptors
+        self.eventid_sub_id = eventid_sub_id
+        self.total_def_size = total_def_size
 
 
 class EvtxChunk:
@@ -74,6 +69,7 @@ class EvtxChunk:
         self.data = data
         self.offset = offset
         self._records: list[tuple[int, bytes]] = []
+        self._template_cache: dict[int, _TemplateInfo] = {}
         self._parse()
 
     def _parse(self) -> None:
@@ -81,35 +77,131 @@ class EvtxChunk:
         if len(self.data) < 512 or self.data[:8] != EVTX_CHUNK_SIGNATURE:
             return
 
-        # Chunk header fields (libevtx structure)
-        # Offset 0-8: signature "ElfChnk\0"
-        # Offset 8-16: first event record number (uint64)
-        # Offset 16-24: last event record number (uint64)
-        # Offset 24-32: first event record id (uint64)
-        # Offset 32-40: last event record id (uint64)
-        # Offset 40-44: header size (uint32, typically 128)
-        # Offset 44-48: last event record data offset (uint32)
-        # Offset 48-52: free space offset (uint32)
-        # Offset 128+: string table, template table, records
-
-        struct.unpack("<I", self.data[40:44])[0]
-        struct.unpack("<I", self.data[44:48])[0]
         free_space_offset = struct.unpack("<I", self.data[48:52])[0]
 
-        # Records start after header (typically at offset 512 within chunk)
-        # Look for record signatures
-        pos = 512  # Records typically start here
+        pos = 512
         while pos < min(free_space_offset, len(self.data) - 28):
-            # Check for record signature
-            if self.data[pos:pos+4] == EVTX_RECORD_SIGNATURE:
-                # Record header: signature (4) + size (4) + record_id (8) + timestamp (8)
+            if self.data[pos:pos + 4] == EVTX_RECORD_SIGNATURE:
                 if pos + 28 <= len(self.data):
-                    record_size = struct.unpack("<I", self.data[pos+4:pos+8])[0]
+                    record_size = struct.unpack("<I", self.data[pos + 4:pos + 8])[0]
                     if record_size > 0 and pos + record_size <= len(self.data):
-                        self._records.append((pos, self.data[pos:pos+record_size]))
+                        self._records.append((pos, self.data[pos:pos + record_size]))
                         pos += record_size
                         continue
             pos += 1
+
+        self._build_template_cache()
+
+    def _build_template_cache(self) -> None:
+        """Parse template definitions from records and cache them."""
+        for _pos, record_data in self._records:
+            if len(record_data) < 48:
+                continue
+
+            # BinXML content starts at record offset 28 (after 24-byte header + 4-byte fragment header)
+            # Template instance token is at record[28]
+            binxml = record_data[28:]
+            if len(binxml) < 10 or binxml[0] != BINXML_TEMPLATE_INSTANCE:
+                continue
+
+            # Template instance: token(1) + unknown(1) + template_id(4) + def_offset(4)
+            tpl_offset = struct.unpack("<I", binxml[6:10])[0]
+            if tpl_offset in self._template_cache:
+                continue
+
+            self._parse_template_at(tpl_offset)
+
+    def _parse_template_at(self, offset: int) -> None:
+        """Parse a template definition at a chunk-relative offset.
+
+        Template definition layout:
+          [0:4]     next template offset (uint32)
+          [4:20]    template identifier GUID (16 bytes)
+          [20:24]   element data size (uint32)
+          [24:24+S] element body (S bytes, contains XML structure)
+          [24+S]    number of substitution descriptors (uint32)
+          [24+S+4]  descriptors (N * 4 bytes: uint16 size + uint16 type)
+        """
+        d = self.data
+        if offset + 24 >= len(d):
+            return
+
+        elem_data_size = struct.unpack("<I", d[offset + 20:offset + 24])[0]
+        if elem_data_size == 0 or offset + 24 + elem_data_size + 4 > len(d):
+            return
+
+        sub_count_pos = offset + 24 + elem_data_size
+        num_subs = struct.unpack("<I", d[sub_count_pos:sub_count_pos + 4])[0]
+        if num_subs < 1 or num_subs > 100:
+            return
+
+        desc_start = sub_count_pos + 4
+        if desc_start + num_subs * 4 > len(d):
+            return
+
+        descriptors: list[tuple[int, int]] = []
+        valid = True
+        for k in range(num_subs):
+            off = desc_start + k * 4
+            sz = struct.unpack("<H", d[off:off + 2])[0]
+            tp = struct.unpack("<H", d[off + 2:off + 4])[0]
+            if (tp & 0x7F) > VALUE_BINXML:
+                valid = False
+                break
+            descriptors.append((sz, tp & 0x7F))
+
+        if not valid or not descriptors:
+            return
+
+        # Find the EventID substitution index by scanning the element body
+        elem_body = d[offset + 24:offset + 24 + elem_data_size]
+        eventid_sub_id = self._find_eventid_sub_id(elem_body)
+
+        total_def_size = 24 + elem_data_size + 4 + num_subs * 4
+        self._template_cache[offset] = _TemplateInfo(descriptors, eventid_sub_id, total_def_size)
+
+    def _find_eventid_sub_id(self, elem_body: bytes) -> int | None:
+        """Find the substitution ID for the EventID value in the template body.
+
+        Scans the template element body for "EventID" (UTF-16LE), then finds
+        the substitution token after the close-start-element (0x02) that
+        represents the EventID text content (not the Qualifiers attribute).
+
+        Substitution tokens (0x0D/0x0E) are 4 bytes: token + sub_id(2) + type(1).
+        We must skip them properly to avoid interpreting their data bytes as tokens.
+        """
+        eid_pos = elem_body.find(_EVENTID_UTF16LE)
+        if eid_pos < 0:
+            return None
+
+        # After "EventID", scan for close-start-element (0x02), then the next
+        # substitution token (0x0D or 0x0E) is the EventID value.
+        found_close = False
+        i = eid_pos + len(_EVENTID_UTF16LE)
+        limit = min(i + 80, len(elem_body) - 3)
+
+        while i < limit:
+            token = elem_body[i]
+            if token in (BINXML_NORMAL_SUBSTITUTION, BINXML_OPTIONAL_SUBSTITUTION):
+                if found_close:
+                    sub_id = struct.unpack("<H", elem_body[i + 1:i + 3])[0]
+                    return sub_id
+                # Skip full substitution token: token(1) + sub_id(2) + type(1)
+                i += 4
+                continue
+            if token == BINXML_CLOSE_START_ELEMENT:
+                found_close = True
+                i += 1
+                continue
+            if token == BINXML_END_ELEMENT:
+                break
+            i += 1
+
+        return None
+
+    def get_template(self, tpl_offset: int) -> _TemplateInfo | None:
+        """Get cached template info by offset."""
+        return self._template_cache.get(tpl_offset)
 
     def records(self) -> Iterator[tuple[int, bytes]]:
         """Yield (offset, data) for each record."""
@@ -119,11 +211,18 @@ class EvtxChunk:
 class EvtxRecord:
     """Single EVTX event record."""
 
-    def __init__(self, data: bytes, chunk_offset: int, record_offset: int) -> None:
+    def __init__(
+        self,
+        data: bytes,
+        chunk_offset: int,
+        record_offset: int,
+        chunk: EvtxChunk | None = None,
+    ) -> None:
         """Initialize record from raw data."""
         self.data = data
         self.chunk_offset = chunk_offset
         self.record_offset = record_offset
+        self._chunk = chunk
         self.record_id: int = 0
         self.timestamp: datetime | None = None
         self._event_data: dict[str, Any] = {}
@@ -134,19 +233,11 @@ class EvtxRecord:
         if len(self.data) < 28:
             return
 
-        # Record header structure:
-        # 0-4: signature (**\x00\x00)
-        # 4-8: size
-        # 8-16: record number
-        # 16-24: timestamp (FILETIME)
-
         self.record_id = struct.unpack("<Q", self.data[8:16])[0]
         filetime = struct.unpack("<Q", self.data[16:24])[0]
 
-        # Convert FILETIME to datetime
         if filetime > 0:
             try:
-                # FILETIME: 100-nanosecond intervals since 1601-01-01
                 unix_ts = (filetime - 116444736000000000) / 10000000
                 self.timestamp = datetime.fromtimestamp(unix_ts, tz=UTC)
             except (OSError, ValueError):
@@ -157,95 +248,142 @@ class EvtxRecord:
         if self._event_data:
             return self._event_data
 
-        if len(self.data) < 28:
+        if len(self.data) < 38:
             return {}
 
-        # BinXML starts after the record header (24 bytes) + copy size (4 bytes)
-        binxml_start = 28
-        binxml_data = self.data[binxml_start:]
+        # Record layout: header(24) + fragment_header(4) + binxml_content
+        # Template instance starts at offset 28 (after fragment header)
+        binxml = self.data[28:]
 
-        self._event_data = self._parse_binxml_simple(binxml_data)
+        result = self._parse_with_template(binxml)
+
+        # Extract strings for provider_name and channel
+        strings = self._extract_strings(binxml)
+        if strings:
+            result["extracted_strings"] = strings
+
+        for s in strings:
+            if "Microsoft" in s or "Security" in s or "-" in s:
+                result.setdefault("provider_name", s)
+                break
+
+        for s in strings:
+            if s.startswith("Microsoft-Windows-") or s in (
+                "Security", "System", "Application",
+            ):
+                result.setdefault("channel", s)
+                break
+
+        self._event_data = result
         return self._event_data
 
-    def _parse_binxml_simple(self, data: bytes) -> dict[str, Any]:
-        """Simple BinXML parser that extracts key fields.
+    def _parse_with_template(self, binxml: bytes) -> dict[str, Any]:
+        """Extract event fields using BinXML template substitution parsing.
 
-        This is a simplified parser that extracts common event fields
-        without fully parsing the BinXML structure.
+        Template instance layout (at binxml[0]):
+          [0]    0x0C template instance token
+          [1]    unknown byte
+          [2:6]  template identifier (first 4 bytes of GUID)
+          [6:10] template_def_offset (uint32, chunk-relative)
+
+        For inline templates (first occurrence):
+          [10:10+D]  template definition (D bytes, includes descriptors)
+          [10+D:]    substitution values
+
+        For referenced templates (subsequent occurrences):
+          [10:14]        num_descriptors (uint32)
+          [14:14+N*4]    runtime value descriptors (N * 4 bytes)
+          [14+N*4:]      substitution values
         """
         result: dict[str, Any] = {}
 
-        try:
-            # Look for common patterns in the binary data
+        if len(binxml) < 10 or binxml[0] != BINXML_TEMPLATE_INSTANCE:
+            return result
 
-            # Try to find EventID (usually a 2-byte value after specific patterns)
-            # EventID is typically in the System/EventID element
+        tpl_offset = struct.unpack("<I", binxml[6:10])[0]
 
-            # Extract strings from the data
-            strings = self._extract_strings(data)
-            if strings:
-                result["extracted_strings"] = strings
+        tpl_info = self._chunk.get_template(tpl_offset) if self._chunk else None
+        if not tpl_info:
+            return result
 
-            # Look for specific field patterns
-            # Provider Name often appears early
-            # EventID is typically a small integer
+        num_descs = len(tpl_info.descriptors)
+        expected_inline_offset = self.record_offset + 28 + 10
+        is_inline = (tpl_offset == expected_inline_offset)
 
-            # Simple heuristic: look for Provider pattern
-            provider_idx = data.find(b"Provider")
-            if provider_idx > 0:
-                # Try to extract provider name from nearby strings
-                for s in strings:
-                    if "Microsoft" in s or "Security" in s or "-" in s:
-                        result["provider_name"] = s
-                        break
+        if is_inline:
+            # Inline: values follow the template definition directly.
+            # Use template def descriptors for sizes.
+            values_start = 10 + tpl_info.total_def_size
+            descriptors = tpl_info.descriptors
+        else:
+            # Referenced: runtime descriptor array precedes the values.
+            # [10:14] = num_descriptors, [14:14+N*4] = descriptors, then values.
+            desc_array_start = 14
+            values_start = desc_array_start + num_descs * 4
 
-            # Try to find EventID by looking for small integers after specific markers
-            # This is a heuristic approach
-            for i in range(0, min(200, len(data) - 2)):
-                if data[i:i+1] == b'\x04' and data[i+1:i+2] in (b'\x00', b'\x01', b'\x02'):
-                    # Might be EventID as uint16
-                    try:
-                        event_id = struct.unpack("<H", data[i+2:i+4])[0]
-                        if 0 < event_id < 65535:
-                            result["event_id"] = event_id
-                            break
-                    except Exception:
-                        pass
-
-            # Extract Channel if present
-            for s in strings:
-                if s.startswith("Microsoft-Windows-") or s in ("Security", "System", "Application"):
-                    result["channel"] = s
+            # Read runtime descriptors (sizes may differ from template def)
+            descriptors = []
+            for k in range(num_descs):
+                off = desc_array_start + k * 4
+                if off + 4 > len(binxml):
                     break
+                rsz = struct.unpack("<H", binxml[off:off + 2])[0]
+                rtp = struct.unpack("<H", binxml[off + 2:off + 4])[0]
+                descriptors.append((rsz, rtp & 0x7F))
 
-        except Exception:
-            pass
+        if values_start >= len(binxml):
+            return result
+
+        # Build a map of substitution_id -> (offset_in_binxml, size, type)
+        sub_values: dict[int, tuple[int, int, int]] = {}
+        current = values_start
+        for sub_id, (size, vtype) in enumerate(descriptors):
+            if current + size > len(binxml):
+                break
+            sub_values[sub_id] = (current, size, vtype)
+            current += size
+
+        # Extract EventID using the known substitution ID
+        if tpl_info.eventid_sub_id is not None and tpl_info.eventid_sub_id in sub_values:
+            off, sz, vt = sub_values[tpl_info.eventid_sub_id]
+            if sz == 2 and vt == VALUE_UINT16:
+                eid = struct.unpack("<H", binxml[off:off + 2])[0]
+                if 0 < eid < 65535:
+                    result["event_id"] = eid
+
+        # Extract additional System fields from substitution values
+        for _sub_id, (off, sz, vt) in sub_values.items():
+            if sz == 0:
+                continue
+
+            if vt == VALUE_GUID and sz == 16 and "provider_guid" not in result:
+                result["provider_guid"] = _format_guid(binxml[off:off + 16])
+
+            if vt == VALUE_UINT64 and sz == 8 and "event_record_id" not in result:
+                result["event_record_id"] = struct.unpack("<Q", binxml[off:off + 8])[0]
 
         return result
 
     def _extract_strings(self, data: bytes) -> list[str]:
-        """Extract readable strings from binary data."""
+        """Extract readable UTF-16LE strings from binary data."""
         strings = []
 
-        # Look for null-terminated UTF-16LE strings
         i = 0
         while i < len(data) - 4:
-            # Check for potential string start (printable ASCII as UTF-16LE)
-            if data[i+1:i+2] == b'\x00' and 0x20 <= data[i] <= 0x7e:
-                # Try to read UTF-16LE string
+            if data[i + 1:i + 2] == b'\x00' and 0x20 <= data[i] <= 0x7e:
                 end = i
                 while end < len(data) - 1:
-                    char = data[end:end+2]
+                    char = data[end:end + 2]
                     if char == b'\x00\x00':
                         break
                     if len(char) < 2:
                         break
                     code = struct.unpack("<H", char)[0]
-                    if code > 0xFFFF or (code > 0 and code < 0x20 and code not in (9, 10, 13)):
+                    if code > 0xFFFF or (0 < code < 0x20 and code not in (9, 10, 13)):
                         break
                     end += 2
 
-                if end > i + 4:  # Minimum string length
+                if end > i + 4:
                     try:
                         s = data[i:end].decode("utf-16-le", errors="ignore")
                         if len(s) > 2 and s.isprintable():
@@ -256,15 +394,24 @@ class EvtxRecord:
                     continue
             i += 1
 
-        # Deduplicate while preserving order
-        seen = set()
-        unique_strings = []
+        seen: set[str] = set()
+        unique: list[str] = []
         for s in strings:
             if s not in seen and len(s) > 2:
                 seen.add(s)
-                unique_strings.append(s)
+                unique.append(s)
 
-        return unique_strings[:20]  # Limit to first 20 strings
+        return unique[:20]
+
+
+def _format_guid(data: bytes) -> str:
+    """Format 16 bytes as a GUID string."""
+    if len(data) != 16:
+        return data.hex()
+    a = struct.unpack("<IHH", data[:8])
+    b = data[8:10]
+    c = data[10:16]
+    return f"{a[0]:08x}-{a[1]:04x}-{a[2]:04x}-{b[0]:02x}{b[1]:02x}-{c.hex()}"
 
 
 @ParserRegistry.register
@@ -312,29 +459,14 @@ class EvtxParser(BaseParser):
         Yields:
             ParsedRecord for each event
         """
-        # Verify EVTX signature
         if len(data) < 4096 or data[:8] != EVTX_SIGNATURE:
             raise ValueError("Invalid EVTX file signature")
 
-        # Parse header
-        # Offset 8-16: first chunk number
-        # Offset 16-24: last chunk number
-        # Offset 24-32: next record identifier
-        # Offset 32-36: header size (typically 4096)
-        # Offset 36-40: minor version
-        # Offset 40-44: major version
-        # Offset 44-48: chunk size (typically 65536)
-
-        # EVTX file header is always 4096 bytes
-        # The header_size field at offset 32 is often 128 (internal header),
-        # but chunks always start at offset 4096
         header_size = 4096
-
         chunk_size = struct.unpack("<I", data[44:48])[0]
         if chunk_size == 0:
-            chunk_size = 65536  # Default chunk size
+            chunk_size = 65536
 
-        # Parse chunks
         chunk_offset = header_size
         record_index = 0
         all_records: list[EvtxRecord] = []
@@ -349,16 +481,14 @@ class EvtxParser(BaseParser):
             chunk = EvtxChunk(chunk_data, chunk_offset)
 
             for record_offset, record_data in chunk.records():
-                record = EvtxRecord(record_data, chunk_offset, record_offset)
+                record = EvtxRecord(record_data, chunk_offset, record_offset, chunk)
                 if record.timestamp:
                     all_records.append(record)
 
             chunk_offset += chunk_size
 
-        # Sort by timestamp for deterministic output
         all_records.sort(key=lambda r: (r.timestamp or datetime.min.replace(tzinfo=UTC), r.record_id))
 
-        # Yield parsed records
         for record in all_records:
             try:
                 parsed = self._create_parsed_record(record, record_index)
@@ -369,27 +499,15 @@ class EvtxParser(BaseParser):
                 continue
 
     def _create_parsed_record(self, record: EvtxRecord, index: int) -> ParsedRecord:
-        """Create ParsedRecord from EVTX record.
-
-        Args:
-            record: EvtxRecord instance
-            index: Record index
-
-        Returns:
-            ParsedRecord with event data
-        """
-        # Extract event data
+        """Create ParsedRecord from EVTX record."""
         event_data = record.parse_binxml()
 
-        # Normalize timestamp
         timestamp = self.normalize_timestamp(record.timestamp) if record.timestamp else None
         timestamp_original = record.timestamp.isoformat() if record.timestamp else None
 
-        # Build record ID
         event_id = event_data.get("event_id", "unknown")
         record_id = self.create_record_id("evtx", event_id, record.record_id)
 
-        # Add basic fields to event data
         event_data["record_number"] = record.record_id
 
         return ParsedRecord(

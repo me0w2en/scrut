@@ -111,8 +111,15 @@ class ParseCache:
         finally:
             conn.close()
 
-    def _make_key(self, file_path: Path, parser_name: str) -> str:
-        """Generate cache key from file path and parser."""
+    def _make_key(
+        self, file_path: Path | str, parser_name: str, target_id: str | None = None
+    ) -> str:
+        """Generate cache key from file path and parser.
+
+        For target mode, includes target_id to namespace keys per image.
+        """
+        if target_id:
+            return f"{parser_name}:target:{target_id}:{file_path}"
         return f"{parser_name}:{file_path}"
 
     def _compute_hash(self, file_path: Path) -> str:
@@ -125,19 +132,23 @@ class ParseCache:
 
     def get(
         self,
-        file_path: Path,
+        file_path: Path | str,
         parser_name: str,
+        source_hash: str | None = None,
+        target_id: str | None = None,
     ) -> list[dict[str, Any]] | None:
         """Get cached parsing results.
 
         Args:
             file_path: Path to the parsed file
             parser_name: Name of the parser used
+            source_hash: Pre-computed hash (skips file I/O when provided)
+            target_id: Target ID for image-based parsing
 
         Returns:
             List of parsed records or None if not cached/expired
         """
-        key = self._make_key(file_path, parser_name)
+        key = self._make_key(file_path, parser_name, target_id=target_id)
         now = time.time()
 
         with self._connection() as conn:
@@ -155,7 +166,7 @@ class ParseCache:
                 )
                 return None
 
-            current_hash = self._compute_hash(file_path)
+            current_hash = source_hash or self._compute_hash(Path(file_path))
             if current_hash != row["file_hash"]:
                 conn.execute("DELETE FROM cache_entries WHERE key = ?", (key,))
                 conn.execute(
@@ -175,10 +186,12 @@ class ParseCache:
 
     def put(
         self,
-        file_path: Path,
+        file_path: Path | str,
         parser_name: str,
         records: list[dict[str, Any]],
         ttl: timedelta | None = None,
+        source_hash: str | None = None,
+        target_id: str | None = None,
     ) -> None:
         """Cache parsing results.
 
@@ -187,9 +200,11 @@ class ParseCache:
             parser_name: Name of the parser used
             records: Parsed records to cache
             ttl: Optional custom TTL (uses default if not specified)
+            source_hash: Pre-computed hash (skips file I/O when provided)
+            target_id: Target ID for image-based parsing
         """
-        key = self._make_key(file_path, parser_name)
-        file_hash = self._compute_hash(file_path)
+        key = self._make_key(file_path, parser_name, target_id=target_id)
+        file_hash = source_hash or self._compute_hash(Path(file_path))
         now = time.time()
 
         if ttl is None:
@@ -210,21 +225,32 @@ class ParseCache:
 
         self._maybe_evict()
 
-    def invalidate(self, file_path: Path, parser_name: str | None = None) -> int:
+    def invalidate(
+        self,
+        file_path: Path | str,
+        parser_name: str | None = None,
+        target_id: str | None = None,
+    ) -> int:
         """Invalidate cache entries for a file.
 
         Args:
             file_path: Path to the file
             parser_name: Optional parser name (all parsers if not specified)
+            target_id: Target ID for image-based parsing
 
         Returns:
             Number of entries invalidated
         """
         with self._connection() as conn:
             if parser_name:
-                key = self._make_key(file_path, parser_name)
+                key = self._make_key(file_path, parser_name, target_id=target_id)
                 result = conn.execute(
                     "DELETE FROM cache_entries WHERE key = ?", (key,)
+                )
+            elif target_id:
+                result = conn.execute(
+                    "DELETE FROM cache_entries WHERE key LIKE ?",
+                    (f"%:target:{target_id}:{file_path}",),
                 )
             else:
                 result = conn.execute(

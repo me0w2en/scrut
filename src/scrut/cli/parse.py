@@ -116,13 +116,18 @@ def _generic_parse(
             timezone_str=ctx.obj.get("timezone", "UTC"),
         )
 
-        use_cache = not no_cache and artifact_path is not None and not target_id
+        use_cache = not no_cache
+        cache_path = image_artifact_path if target_id else str(artifact_path)
+        cache_target_id = target_id if target_id else None
         cached_records = None
 
         if use_cache:
             try:
                 cache = get_cache()
-                cached_records = cache.get(artifact_path, artifact_type)
+                cached_records = cache.get(
+                    cache_path, artifact_type,
+                    source_hash=source_hash, target_id=cache_target_id,
+                )
                 if cached_records is not None:
                     click.echo(f"Cache hit: {artifact_type} ({len(cached_records)} records)", err=True)
                 else:
@@ -161,7 +166,7 @@ def _generic_parse(
                 last_timestamp = ts
                 last_record_id = record_dict.get("record_id")
 
-                if paginator.should_stop():
+                if limit and records_output >= limit:
                     break
         else:
             all_record_dicts: list[dict] = [] if use_cache else None
@@ -189,13 +194,16 @@ def _generic_parse(
                 last_timestamp = record.timestamp
                 last_record_id = record.record_id
 
-                if paginator.should_stop():
+                if limit and records_output >= limit:
                     break
 
             if use_cache and all_record_dicts is not None:
                 try:
                     cache = get_cache()
-                    cache.put(artifact_path, artifact_type, all_record_dicts)
+                    cache.put(
+                        cache_path, artifact_type, all_record_dicts,
+                        source_hash=source_hash, target_id=cache_target_id,
+                    )
                 except Exception:
                     pass
 
@@ -502,6 +510,7 @@ def _get_artifact_data(
 @click.option("--until", type=str, default=None, help="Filter records until timestamp (ISO-8601 or relative)")
 @click.option("--cursor", type=str, default=None, help="Pagination cursor from previous request")
 @click.option("--summary", is_flag=True, help="Output count only, no records")
+@click.option("--no-cache", is_flag=True, default=False, help="Disable cache for this parse")
 @click.pass_context
 def evtx(
     ctx: click.Context,
@@ -514,6 +523,7 @@ def evtx(
     until: str | None,
     cursor: str | None,
     summary: bool,
+    no_cache: bool,
 ) -> None:
     """Parse Windows Event Log (EVTX) file to JSONL.
 
@@ -576,6 +586,25 @@ def evtx(
             timezone_str=ctx.obj.get("timezone", "UTC"),
         )
 
+        use_cache = not no_cache
+        cache_path = image_artifact_path if target_id else str(artifact_path)
+        cache_target_id = target_id if target_id else None
+        cached_records = None
+
+        if use_cache:
+            try:
+                cache = get_cache()
+                cached_records = cache.get(
+                    cache_path, "evtx",
+                    source_hash=source_hash, target_id=cache_target_id,
+                )
+                if cached_records is not None:
+                    click.echo(f"Cache hit: evtx ({len(cached_records)} records)", err=True)
+                else:
+                    click.echo("Cache miss: evtx", err=True)
+            except Exception:
+                cached_records = None
+
         from scrut.core.pagination import CursorGenerator, Paginator, parse_time_filter
 
         paginator = Paginator(limit=limit, cursor=cursor)
@@ -588,27 +617,66 @@ def evtx(
         last_timestamp = None
         last_record_id = None
 
-        for record in parser.parse_bytes(data):
-            records_processed += 1
+        if cached_records is not None:
+            for record_dict in cached_records:
+                records_processed += 1
 
-            if paginator.should_skip(records_processed - 1):
-                continue
+                if paginator.should_skip(records_processed - 1):
+                    continue
 
-            if since_dt and record.timestamp and record.timestamp < since_dt:
-                continue
+                ts = record_dict.get("timestamp")
+                if since_dt and ts and ts < since_dt.isoformat():
+                    continue
+                if until_dt and ts and ts > until_dt.isoformat():
+                    continue
 
-            if until_dt and record.timestamp and record.timestamp > until_dt:
-                continue
+                if not summary:
+                    formatter.output(record_dict)
 
-            if not summary:
-                formatter.output(record.model_dump(mode="json", exclude_none=True))
+                records_output += 1
+                last_timestamp = ts
+                last_record_id = record_dict.get("record_id")
 
-            records_output += 1
-            last_timestamp = record.timestamp
-            last_record_id = record.record_id
+                if limit and records_output >= limit:
+                    break
+        else:
+            all_record_dicts: list[dict] | None = [] if use_cache else None
 
-            if paginator.should_stop():
-                break
+            for record in parser.parse_bytes(data):
+                records_processed += 1
+                record_dict = record.model_dump(mode="json", exclude_none=True)
+
+                if all_record_dicts is not None:
+                    all_record_dicts.append(record_dict)
+
+                if paginator.should_skip(records_processed - 1):
+                    continue
+
+                if since_dt and record.timestamp and record.timestamp < since_dt:
+                    continue
+
+                if until_dt and record.timestamp and record.timestamp > until_dt:
+                    continue
+
+                if not summary:
+                    formatter.output(record_dict)
+
+                records_output += 1
+                last_timestamp = record.timestamp
+                last_record_id = record.record_id
+
+                if limit and records_output >= limit:
+                    break
+
+            if use_cache and all_record_dicts is not None:
+                try:
+                    cache = get_cache()
+                    cache.put(
+                        cache_path, "evtx", all_record_dicts,
+                        source_hash=source_hash, target_id=cache_target_id,
+                    )
+                except Exception:
+                    pass
 
         has_more = limit is not None and records_output >= limit
         next_cursor = None
@@ -684,6 +752,7 @@ def evtx(
 )
 @click.option("--limit", "-l", type=int, default=None, help="Limit number of records")
 @click.option("--since", type=str, default=None, help="Filter records since timestamp (ISO-8601)")
+@click.option("--no-cache", is_flag=True, default=False, help="Disable cache for this parse")
 @click.pass_context
 def prefetch(
     ctx: click.Context,
@@ -693,6 +762,7 @@ def prefetch(
     partition_index: int | None,
     limit: int | None,
     since: str | None,
+    no_cache: bool,
 ) -> None:
     """Parse Windows Prefetch file to JSONL.
 
@@ -755,24 +825,74 @@ def prefetch(
             timezone_str=ctx.obj.get("timezone", "UTC"),
         )
 
+        use_cache = not no_cache
+        cache_path = image_artifact_path if target_id else str(artifact_path)
+        cache_target_id = target_id if target_id else None
+        cached_records = None
+
+        if use_cache:
+            try:
+                cache = get_cache()
+                cached_records = cache.get(
+                    cache_path, "prefetch",
+                    source_hash=source_hash, target_id=cache_target_id,
+                )
+                if cached_records is not None:
+                    click.echo(f"Cache hit: prefetch ({len(cached_records)} records)", err=True)
+                else:
+                    click.echo("Cache miss: prefetch", err=True)
+            except Exception:
+                cached_records = None
+
         start_time = time.time()
         records_processed = 0
         records_output = 0
 
-        for record in parser.parse_bytes(data):
-            records_processed += 1
+        if cached_records is not None:
+            for record_dict in cached_records:
+                records_processed += 1
 
-            if since and record.timestamp:
-                from datetime import datetime
-                since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
-                if record.timestamp < since_dt:
-                    continue
+                if since:
+                    ts = record_dict.get("timestamp")
+                    if ts and ts < since:
+                        continue
 
-            formatter.output(record.model_dump(mode="json", exclude_none=True))
-            records_output += 1
+                formatter.output(record_dict)
+                records_output += 1
 
-            if limit and records_output >= limit:
-                break
+                if limit and records_output >= limit:
+                    break
+        else:
+            all_record_dicts: list[dict] | None = [] if use_cache else None
+
+            for record in parser.parse_bytes(data):
+                records_processed += 1
+                record_dict = record.model_dump(mode="json", exclude_none=True)
+
+                if all_record_dicts is not None:
+                    all_record_dicts.append(record_dict)
+
+                if since and record.timestamp:
+                    from datetime import datetime
+                    since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
+                    if record.timestamp < since_dt:
+                        continue
+
+                formatter.output(record_dict)
+                records_output += 1
+
+                if limit and records_output >= limit:
+                    break
+
+            if use_cache and all_record_dicts is not None:
+                try:
+                    cache = get_cache()
+                    cache.put(
+                        cache_path, "prefetch", all_record_dicts,
+                        source_hash=source_hash, target_id=cache_target_id,
+                    )
+                except Exception:
+                    pass
 
         duration_ms = int((time.time() - start_time) * 1000)
 
@@ -825,6 +945,7 @@ def prefetch(
 )
 @click.option("--limit", "-l", type=int, default=None, help="Limit number of records")
 @click.option("--key-filter", "-k", type=str, default=None, help="Filter by key path (substring match)")
+@click.option("--no-cache", is_flag=True, default=False, help="Disable cache for this parse")
 @click.pass_context
 def registry(
     ctx: click.Context,
@@ -834,6 +955,7 @@ def registry(
     partition_index: int | None,
     limit: int | None,
     key_filter: str | None,
+    no_cache: bool,
 ) -> None:
     """Parse Windows Registry hive file to JSONL.
 
@@ -889,23 +1011,73 @@ def registry(
             timezone_str=ctx.obj.get("timezone", "UTC"),
         )
 
+        use_cache = not no_cache
+        cache_path = image_artifact_path if target_id else str(artifact_path)
+        cache_target_id = target_id if target_id else None
+        cached_records = None
+
+        if use_cache:
+            try:
+                cache = get_cache()
+                cached_records = cache.get(
+                    cache_path, "registry",
+                    source_hash=source_hash, target_id=cache_target_id,
+                )
+                if cached_records is not None:
+                    click.echo(f"Cache hit: registry ({len(cached_records)} records)", err=True)
+                else:
+                    click.echo("Cache miss: registry", err=True)
+            except Exception:
+                cached_records = None
+
         start_time = time.time()
         records_processed = 0
         records_output = 0
 
-        for record in parser.parse_bytes(data):
-            records_processed += 1
+        if cached_records is not None:
+            for record_dict in cached_records:
+                records_processed += 1
 
-            if key_filter:
-                key_path = record.data.get("key_path", "")
-                if key_filter.lower() not in key_path.lower():
-                    continue
+                if key_filter:
+                    key_path = record_dict.get("data", {}).get("key_path", "")
+                    if key_filter.lower() not in key_path.lower():
+                        continue
 
-            formatter.output(record.model_dump(mode="json", exclude_none=True))
-            records_output += 1
+                formatter.output(record_dict)
+                records_output += 1
 
-            if limit and records_output >= limit:
-                break
+                if limit and records_output >= limit:
+                    break
+        else:
+            all_record_dicts: list[dict] | None = [] if use_cache else None
+
+            for record in parser.parse_bytes(data):
+                records_processed += 1
+                record_dict = record.model_dump(mode="json", exclude_none=True)
+
+                if all_record_dicts is not None:
+                    all_record_dicts.append(record_dict)
+
+                if key_filter:
+                    key_path = record.data.get("key_path", "")
+                    if key_filter.lower() not in key_path.lower():
+                        continue
+
+                formatter.output(record_dict)
+                records_output += 1
+
+                if limit and records_output >= limit:
+                    break
+
+            if use_cache and all_record_dicts is not None:
+                try:
+                    cache = get_cache()
+                    cache.put(
+                        cache_path, "registry", all_record_dicts,
+                        source_hash=source_hash, target_id=cache_target_id,
+                    )
+                except Exception:
+                    pass
 
         duration_ms = int((time.time() - start_time) * 1000)
 
